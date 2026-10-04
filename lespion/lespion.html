@@ -1,0 +1,293 @@
+<style>
+/* ── LADESCHALE ──────────────────────────────────────────────────────────
+   Diese Datei ist nur die Hülle: Sie holt lespion.app.html aus GitHub und
+   baut sie in die Seite ein. Der eigentliche Generator steht dort.        */
+#lsp-lade{position:fixed;inset:0;z-index:9999;background:radial-gradient(ellipse at center,#1d1a24 0%,#08070b 100%);
+  color:#f5e8cc;font-family:'Palatino Linotype','Book Antiqua',Palatino,'Iowan Old Style','URW Palladio L',Georgia,serif;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:14px;padding:24px;text-align:center;transition:opacity 0.4s;}
+#lsp-lade.aus{opacity:0;pointer-events:none;}
+#lsp-titel{font-size:clamp(2rem,9vw,4rem);font-weight:700;color:#f0c060;letter-spacing:0.22em;text-shadow:0 0 40px rgba(212,160,51,0.5);}
+#lsp-status{font-size:0.7rem;letter-spacing:0.18em;color:#9a7a50;min-height:1.2em;}
+#lsp-hinweis{font-family:Georgia,serif;font-size:0.82rem;line-height:1.6;color:#e0a0a0;max-width:520px;
+  background:rgba(155,32,32,0.15);border:1px solid #9b2020;padding:10px 14px;display:none;text-align:left;white-space:pre-wrap;}
+#lsp-knopf{display:none;background:none;border:2px solid #d4a033;color:#f0c060;font-family:'Palatino Linotype','Book Antiqua',Palatino,'Iowan Old Style','URW Palladio L',Georgia,serif;font-size:0.8rem;
+  letter-spacing:0.16em;padding:10px 26px;cursor:pointer;}
+#lsp-knopf:hover{background:rgba(212,160,51,0.1);}
+#lsp-balken{width:min(420px,80vw);height:4px;background:rgba(107,76,42,0.3);overflow:hidden;position:relative;}
+#lsp-balken::after{content:'';position:absolute;left:-50%;top:0;bottom:0;width:50%;
+  background:linear-gradient(90deg,transparent,#f0c060,transparent);animation:lsp-scan 1.3s linear infinite;}
+#lsp-balken.still::after{animation:none;}
+@keyframes lsp-scan{to{left:150%;}}
+#lsp-quelle{font-size:0.58rem;letter-spacing:0.12em;color:#6b4c2a;word-break:break-all;max-width:90vw;}
+</style>
+
+<div id="lsp-app"></div>
+
+<div id="lsp-lade">
+  <div id="lsp-titel">LE SPION</div>
+  <div id="lsp-balken"></div>
+  <div id="lsp-status">lade Generator aus GitHub…</div>
+  <div id="lsp-hinweis"></div>
+  <button id="lsp-knopf" type="button">ERNEUT VERSUCHEN</button>
+  <div id="lsp-quelle"></div>
+</div>
+
+<script>
+// ── LESPION-LADESCHALE V1 (Bauweise aus PROXIMA) ─────────────────────────
+// Perchance liest diesen Bereich einmal beim Laden. Alles, was der Generator
+// wirklich ausmacht, wird erst danach aus GitHub geholt und ins DOM gehängt —
+// dort schaut Perchance nicht mehr hin. Diese Datei ändert sich also fast nie;
+// gearbeitet wird in lespion.app.html im Repository.
+(function () {
+  'use strict';
+
+  var CFG = {
+    besitzer: 'Colimbuli',
+    repo: 'leSpion',
+    zweig: 'main',
+    pfad: 'lespion/lespion.app.html',
+    // Wie lange eine Fassung vom GitHub-CDN kommen darf, bevor frisch geholt wird.
+    taktSekunden: 60
+  };
+
+  var K_TEXT = 'lespion.quelltext';   // letzte erfolgreich geladene Fassung
+  var K_ZWEIG = 'lespion.zweig';      // Zweig-Umschaltung zum Ausprobieren
+
+  function el(id) { return document.getElementById(id); }
+
+  function lies(schluessel) {
+    try { return localStorage.getItem(schluessel); } catch (e) { return null; }
+  }
+  function schreib(schluessel, wert) {
+    try { localStorage.setItem(schluessel, wert); return true; } catch (e) { return false; }
+  }
+
+  // Zweig: erst Adresszeile (?lsp-zweig=… oder #lsp-zweig=…), dann gemerkte
+  // Wahl, sonst der eingestellte Standard. Die Wahl aus der Adresszeile bleibt
+  // gemerkt, damit ein Testzweig einen Neustart übersteht.
+  function zweig() {
+    var such = '';
+    try { such = String(location.search || '') + String(location.hash || ''); } catch (e) {}
+    var treffer = such.match(/lsp-zweig=([A-Za-z0-9._\/-]+)/);
+    if (treffer) {
+      var gewaehlt = decodeURIComponent(treffer[1]);
+      if (gewaehlt === 'standard') { try { localStorage.removeItem(K_ZWEIG); } catch (e) {} }
+      else { schreib(K_ZWEIG, gewaehlt); return gewaehlt; }
+    }
+    return lies(K_ZWEIG) || CFG.zweig;
+  }
+
+  // raw.githubusercontent.com liefert mit Cache-Kopf von fünf Minuten. Der
+  // Zeitstempel im Parameter bricht das auf den eingestellten Takt herunter;
+  // 'frisch' umgeht den Cache ganz (Knopf „erneut versuchen").
+  function takt(frisch) {
+    var ms = Math.max(1, CFG.taktSekunden) * 1000;
+    return frisch ? Date.now() : Math.floor(Date.now() / ms);
+  }
+  // Zweignamen duerfen Schraegstriche enthalten; die sind Teil des Pfades und
+  // muessen stehen bleiben, kodiert wird nur segmentweise.
+  function pfadTeil(wert) {
+    return String(wert).split('/').map(encodeURIComponent).join('/');
+  }
+  function rohUrl(z, frisch) {
+    return 'https://raw.githubusercontent.com/' + CFG.besitzer + '/' + CFG.repo + '/' +
+      pfadTeil(z) + '/' + CFG.pfad + '?v=' + takt(frisch);
+  }
+  // Ausweichweg, falls raw.githubusercontent.com blockiert ist. jsDelivr hält
+  // Zweig-Stände länger vor, taugt also nur als Rückfallebene.
+  function spiegelUrl(z) {
+    return 'https://cdn.jsdelivr.net/gh/' + CFG.besitzer + '/' + CFG.repo + '@' + z + '/' + CFG.pfad;
+  }
+
+  // Die geholte Datei in ihre drei Teile zerlegen. Mehrere style- oder
+  // script-Blöcke werden der Reihe nach zusammengefasst.
+  function teile(text) {
+    var stil = '', skript = '';
+    var markup = String(text == null ? '' : text)
+      .replace(/<style[^>]*>([\s\S]*?)<\/style>/gi, function (_, s) { stil += s + '\n'; return ''; })
+      .replace(/<script[^>]*>([\s\S]*?)<\/script>/gi, function (_, s) { skript += s + '\n'; return ''; });
+    return { stil: stil, markup: markup, skript: skript };
+  }
+
+  // ── Plugin-Bruecke ──────────────────────────────────────────────────────
+  // Perchance stellt die Plugin-Funktionen ai() und image() im Geltungsbereich
+  // des HTML-Bereichs bereit — nicht zwingend als Eigenschaft von window.
+  // Diese Schale steht selbst in diesem Bereich und kann die Namen deshalb
+  // ablesen; der als script-Element eingehaengte Generator laeuft dagegen im
+  // globalen Geltungsbereich und saehe sie dort nicht. Also hier nachreichen,
+  // bevor der Generator startet.
+  var PLUGINS = ['ai', 'image'];
+  var LADER = 'V2';
+  var pluginBericht = {};
+  var imGriff = {};
+
+  function ausUmgebung(name) {
+    // Der eigene Getter unten landet auch im globalen Namensraum. Ohne diese
+    // Sperre riefe die Suche sich selbst auf.
+    if (imGriff[name]) return null;
+    imGriff[name] = true;
+    try {
+      // Direkter eval liest den Namen aus der Perchance-Umgebung dieser Schale.
+      try { var f = eval(name); if (typeof f === 'function' && !f.lspBruecke) return f; } catch (e) {}
+      try {
+        var r = (typeof root !== 'undefined') ? root : null;
+        if (r && typeof r[name] === 'function' && !r[name].lspBruecke) {
+          return function () { return r[name].apply(r, arguments); };
+        }
+      } catch (e) {}
+      return null;
+    } finally { imGriff[name] = false; }
+  }
+
+  function bruecke(name) {
+    var da = null;
+    try { da = window[name]; } catch (e) {}
+    if (typeof da === 'function' && !da.lspBruecke) { pluginBericht[name] = 'direkt vorhanden'; return; }
+    var jetzt = ausUmgebung(name);
+    if (jetzt) {
+      try { window[name] = jetzt; pluginBericht[name] = 'aus der Perchance-Umgebung gebrueckt'; return; } catch (e) {}
+    }
+    if (pluginBericht[name] === 'Weiche gesetzt, Plugin noch nicht da') return;
+    // Plugins von Perchance melden sich oft erst Sekunden spaeter. Statt einmal
+    // nachzusehen, haengt hier eine Weiche im globalen Namensraum: Sie sucht bei
+    // JEDEM Zugriff neu. Sobald das Plugin da ist, geht der Aufruf durch, ohne
+    // dass der Generator etwas davon merken muss. Meldet sich das Plugin selbst
+    // mit einer Zuweisung, macht der Setter wieder eine gewoehnliche
+    // Eigenschaft daraus.
+    try {
+      Object.defineProperty(window, name, {
+        configurable: true, enumerable: true,
+        get: function () { return ausUmgebung(name) || undefined; },
+        set: function (wert) {
+          Object.defineProperty(window, name, {
+            configurable: true, enumerable: true, writable: true, value: wert
+          });
+        }
+      });
+      pluginBericht[name] = 'Weiche gesetzt, Plugin noch nicht da';
+    } catch (e) {
+      pluginBericht[name] = 'nicht erreichbar (' + ((e && e.message) || e) + ')';
+    }
+  }
+
+  function pluginsBruecken() {
+    PLUGINS.forEach(bruecke);
+    return pluginBericht;
+  }
+
+  var eingebaut = false;
+
+  function einbauen(text) {
+    if (eingebaut) return;
+    var t = teile(text);
+    if (!t.skript.trim()) throw new Error('Die geladene Datei enthält keinen Generator-Code.');
+    eingebaut = true;
+    pluginsBruecken();
+
+    el('lsp-app').innerHTML = t.markup;
+
+    if (t.stil.trim()) {
+      var s = document.createElement('style');
+      s.textContent = t.stil;
+      (document.head || document.body).appendChild(s);
+    }
+    // Als echtes script-Element einhängen, nicht per eval: nur so landen die
+    // Funktionen wieder im globalen Namensraum, wo die onclick-Attribute des
+    // Markups und die Perchance-Plugins ai() und image() sie erwarten.
+    var sc = document.createElement('script');
+    sc.textContent = t.skript;
+    document.body.appendChild(sc);
+  }
+
+  function status(text) { var e = el('lsp-status'); if (e) e.textContent = text; }
+
+  function fertig() {
+    var lade = el('lsp-lade');
+    if (!lade) return;
+    lade.className = 'aus';
+    setTimeout(function () { if (lade.parentNode) lade.parentNode.removeChild(lade); }, 500);
+  }
+
+  function scheitern(meldung, zusatz) {
+    var balken = el('lsp-balken'); if (balken) balken.className = 'still';
+    status('nicht geladen');
+    var h = el('lsp-hinweis');
+    if (h) { h.textContent = meldung + (zusatz ? '\n\n' + zusatz : ''); h.style.display = 'block'; }
+    var k = el('lsp-knopf');
+    if (k) k.style.display = 'inline-block';
+  }
+
+  function hinweisZu(fehler) {
+    var m = String(fehler && fehler.message || fehler || '');
+    if (/\b404\b/.test(m)) {
+      return 'Prüfen: Ist das Repository öffentlich, stimmen Zweig und Pfad? ' +
+        'Solange das Repository privat ist, liefert raw.githubusercontent.com für alle 404.';
+    }
+    if (/403/.test(m)) return 'GitHub hat die Anfrage abgelehnt. In ein paar Minuten noch einmal versuchen.';
+    return 'Ohne Netzverbindung zu GitHub kann der Generator nicht starten.';
+  }
+
+  async function holen(z, frisch) {
+    var fehler = null;
+    var adressen = [rohUrl(z, frisch), spiegelUrl(z)];
+    for (var i = 0; i < adressen.length; i++) {
+      try {
+        var antwort = await fetch(adressen[i], { cache: frisch ? 'reload' : 'default' });
+        if (!antwort.ok) throw new Error('HTTP ' + antwort.status + ' für ' + adressen[i]);
+        var text = await antwort.text();
+        if (!text || !text.trim()) throw new Error('Leere Antwort von ' + adressen[i]);
+        return text;
+      } catch (e) { fehler = e; }
+    }
+    throw fehler || new Error('Laden fehlgeschlagen.');
+  }
+
+  async function start(frisch) {
+    var z = zweig();
+    var q = el('lsp-quelle');
+    if (q) q.textContent = CFG.besitzer + '/' + CFG.repo + ' · ' + z + ' · ' + CFG.pfad;
+    var balken = el('lsp-balken'); if (balken) balken.className = '';
+    var h = el('lsp-hinweis'); if (h) h.style.display = 'none';
+    var k = el('lsp-knopf'); if (k) k.style.display = 'none';
+    status('lade Generator aus GitHub…');
+
+    try {
+      var text = await holen(z, frisch);
+      einbauen(text);
+      schreib(K_TEXT, JSON.stringify({ zweig: z, zeit: Date.now(), text: text }));
+      fertig();
+      return true;
+    } catch (e) {
+      // Netz weg, GitHub weg — dann läuft die zuletzt gelaufene Fassung weiter,
+      // statt dass der Generator gar nicht startet.
+      var roh = lies(K_TEXT), gemerkt = null;
+      try { gemerkt = roh ? JSON.parse(roh) : null; } catch (e2) {}
+      if (gemerkt && gemerkt.text) {
+        try {
+          einbauen(gemerkt.text);
+          fertig();
+          console.warn('LE SPION: GitHub nicht erreichbar, gespeicherte Fassung vom ' +
+            new Date(gemerkt.zeit).toLocaleString() + ' läuft. ' + (e && e.message));
+          return true;
+        } catch (e3) { /* gespeicherte Fassung unbrauchbar → normaler Fehlerweg */ }
+      }
+      scheitern(String(e && e.message || e), hinweisZu(e));
+      return false;
+    }
+  }
+
+  var knopf = el('lsp-knopf');
+  if (knopf) knopf.addEventListener('click', function () { start(true); });
+
+  // Zum Nachsehen und Nachhelfen aus der Konsole.
+  window.LESPION_LADER = {
+    cfg: CFG, teile: teile, zweig: zweig, rohUrl: rohUrl, spiegelUrl: spiegelUrl, start: start,
+    version: LADER,
+    plugins: function () { return pluginsBruecken(); },
+    neu: function () { return start(true); },
+    vergiss: function () { try { localStorage.removeItem(K_TEXT); } catch (e) {} return true; }
+  };
+
+  start(false);
+})();
+</script>
