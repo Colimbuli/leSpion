@@ -67,6 +67,7 @@ ctx.globalThis = ctx;
 vm.createContext(ctx);
 vm.runInContext(block[1], ctx);
 ctx.document.getElementById('nameFeld').value = 'Alex';
+ctx.document.getElementById('spionTestWahl').checked = true;
 
 pruefe('Version im Skript gesetzt', /^V\d+\.\d+/.test(ctx.VERSION), ctx.VERSION);
 pruefe('Version im Startbildschirm', html.includes('LE SPION ' + ctx.VERSION));
@@ -144,6 +145,24 @@ pruefe('jede Miene der Agenten ist definiert', ctx.MIMIK_SPIEL.every(k => ctx.MI
 pruefe('Miene aus freiem Text', ctx.mimikAus('Misstrauisch') === 'misstrauisch' && ctx.mimikAus('nervös') === 'nervoes'
   && ctx.mimikAus('quatsch') === 'nachdenklich');
 
+console.log('\n— Taktik in den Prompts —');
+p.runde = 1;
+const wissendPrompt = ctx.baueHinweisPrompt(1), spionPrompt = ctx.baueHinweisPrompt(2);
+pruefe('Wissende bekommen Taktik, Beispiel und Spion-Merkmale',
+  wissendPrompt.includes('SO SPIELST DU GUT') && wissendPrompt.includes('BEISPIEL') && wissendPrompt.includes('WORAN DU DEN SPION ERKENNST'));
+pruefe('Wissende müssen passtAuch liefern', wissendPrompt.includes('"passtAuch"'));
+pruefe('Spion bekommt seine eigene Taktik', spionPrompt.includes('SO SPIELST DU ALS SPION GUT') && !spionPrompt.includes('SO SPIELST DU GUT:'));
+pruefe('Spion bekommt keine Spion-Merkmale mit Begriff', !spionPrompt.includes('WORAN DU DEN SPION ERKENNST'));
+pruefe('Beispielbegriff kommt im Spiel nicht vor', [].concat(...Object.values(ctx.BEGRIFFE)).every(b => ctx.norm(b) !== 'leuchtturm'));
+const toene = p.spieler.slice(1).map(s => s.ton);
+pruefe('jeder Agent hat einen eigenen Ton, der Mensch keinen', new Set(toene).size === 3 && toene.every(Boolean) && !p.spieler[0].ton);
+pruefe('der Ton steht im Prompt', wissendPrompt.includes(p.spieler[1].ton));
+const stufe1 = ctx.rundenStufe(); p.runde = 2; const stufe2 = ctx.rundenStufe(); p.runde = 3; const stufe3 = ctx.rundenStufe(); p.runde = 1;
+pruefe('Runden-Stufen unterscheiden sich', new Set([stufe1, stufe2, stufe3]).size === 3);
+pruefe('Rückmeldung erscheint im Prompt', ctx.baueHinweisPrompt(1, 'XYZ-TEST').includes('ACHTUNG: XYZ-TEST'));
+pruefe('Stimm-Prompt der Wissenden nennt Spion-Merkmale', ctx.baueStimmPrompt(1).includes('WORAN DU DEN SPION ERKENNST'));
+pruefe('Stimm-Prompt des Spions enthält den Begriff nicht', !ctx.baueStimmPrompt(2).includes('Pinguin'));
+
 console.log('\n— Agenten wissen nur ihre eigene Rolle —');
 p.runde = 1;
 p.spieler[1].notizen = ['GEHEIM-EINS'];
@@ -171,7 +190,17 @@ for (let i = 1; i < 4; i++) {
 async function simuliere(opt) {
   const prompts = [];
   let versuche = {};
+  const testPrompts = [];
+  let testZaehler = {};
   ctx.frageKI = async (prompt) => {
+    if (prompt.includes('Welcher Begriff ist gemeint?')) {
+      testPrompts.push(prompt);
+      // Der Testleser errät beim ersten geprüften Hinweis je Runde den Begriff,
+      // wenn opt.testErraet gesetzt ist.
+      const k = ctx.G.runde + '|' + ctx.G.amZug;
+      testZaehler[k] = (testZaehler[k] || 0) + 1;
+      return JSON.stringify({ tipp: opt.testErraet && testZaehler[k] === 1 ? ctx.G.begriff : 'Keine Ahnung' });
+    }
     prompts.push(prompt);
     const ich = ctx.G.spieler.find(s => prompt.includes('Du bist ' + s.name + '.'));
     if (prompt.includes('"stimme"')) {
@@ -181,9 +210,11 @@ async function simuliere(opt) {
     if (prompt.includes('"tipp"')) return JSON.stringify({ tipp: opt.spionTipp });
     const k = ich.name + ctx.G.runde;
     versuche[k] = (versuche[k] || 0) + 1;
-    if (!ich.spion && versuche[k] === 1) return JSON.stringify({ hinweis: 'Das ist ein ' + ctx.G.begriff, mimik: 'nervös' });
+    if (!ich.spion && versuche[k] === 1) return JSON.stringify({ hinweis: 'Das ist ein ' + ctx.G.begriff, mimik: 'nervös', passtAuch: ['A', 'B', 'C'] });
+    if (!ich.spion && versuche[k] === 2 && opt.ohnePasstAuch) return JSON.stringify({ hinweis: 'Ohne Liste ' + ich.name + ctx.G.runde });
     return 'Hier mein Zug: ' + JSON.stringify({
-      hinweis: 'Hinweis ' + ich.name + ' ' + ctx.G.runde, mimik: 'verschmitzt', verdacht: '', notiz: 'Notiz ' + ich.name,
+      hinweis: 'Hinweis ' + ich.name + ' ' + ctx.G.runde + ' v' + versuche[k], mimik: 'verschmitzt', verdacht: '', notiz: 'Notiz ' + ich.name,
+      passtAuch: ['Alpha', 'Beta', 'Gamma'], kandidaten: ['Eins', 'Zwei'],
       vermutung: opt.spionTipp, sicherheit: opt.spionSicher || 10
     });
   };
@@ -193,6 +224,7 @@ async function simuliere(opt) {
   ctx.menschStimme = async () => opt.menschStimme;
   ctx.menschLetzterTipp = async () => opt.spionTipp;
   ctx.CFG.runden = 3; ctx.CFG.name = 'Alex'; ctx.CFG.aussehen = 'a person';
+  ctx.document.getElementById('spionTestWahl').checked = opt.spionTest !== false;
   ctx.zufall = (n) => 0;   // Spion auf Platz 0, Start bei 0, Kategorie/Begriff jeweils der erste Eintrag
   if (opt.spion != null) {
     const echt = ctx.neuePartie;
@@ -203,7 +235,7 @@ async function simuliere(opt) {
   for (let i = 0; i < 400 && ctx.G.phase !== 'ende'; i++) await new Promise(r => setTimeout(r, 1));
   for (let i = 0; i < 50 && (ctx.BILD.laeuft || ctx.BILD.wartend.length); i++) await new Promise(r => setTimeout(r, 1));
   ctx.zufall = (n) => Math.floor(Math.random() * n);
-  return { prompts, bilder };
+  return { prompts, bilder, testPrompts };
 }
 
 async function partien() {
@@ -226,6 +258,34 @@ async function partien() {
   pruefe('kein Prompt des Spions enthält den Begriff', spionPrompts.every(t => !t.includes('„' + G.begriff + '"')));
   pruefe('kein Prompt nennt fremde Rollen',
     r.prompts.every(t => !(t.includes('DU BIST DER SPION') && !t.includes('Du bist ' + spionName + '.'))));
+
+  const notfall = [].concat(ctx.NOTFALL_HINWEISE.wissend, ctx.NOTFALL_HINWEISE.spion);
+  pruefe('keine Notfall-Hinweise nötig', G.verlauf.every(v => notfall.indexOf(v.text) < 0),
+    G.verlauf.map(v => v.text).join(' / '));
+  pruefe('Rückmeldung nach verratenem Begriff', r.prompts.some(t => t.includes('ACHTUNG: Dein letzter Vorschlag') && t.includes('enthielt den Begriff')));
+  pruefe('Spion-Test lief', r.testPrompts.length > 0, String(r.testPrompts.length));
+  // Die Hinweistexte des Stummels enthalten Namen; geprüft wird der Rahmen ohne sie.
+  pruefe('Testleser kennt weder Begriff noch Namen noch Rollen', r.testPrompts.every(t => {
+    const rahmen = t.replace(/- "[^"]*"/g, '');
+    return !rahmen.includes(G.begriff) && !/Spion|Du bist/i.test(rahmen) && G.spieler.every(s => !rahmen.includes(s.name));
+  }));
+  pruefe('Spion-Hinweise werden nicht getestet',
+    r.testPrompts.length === G.verlauf.filter(v => v.typ === 'hinweis' && !G.spieler[v.idx].mensch && !G.spieler[v.idx].spion).length,
+    String(r.testPrompts.length));
+
+  console.log('\n— Spion-Test erwischt zu deutliche Hinweise —');
+  r = await simuliere({ spion: 2, stimmeAuf: 2, menschStimme: 2, spionTipp: 'Robbe', testErraet: true });
+  G = ctx.G;
+  pruefe('Rückmeldung „zu deutlich" geht an den Agenten', r.prompts.some(t => t.includes('war zu deutlich')));
+  pruefe('verworfener Hinweis landet nicht im Verlauf', G.verlauf.every(v => !/ v2$/.test(v.text)),
+    G.verlauf.map(v => v.text).join(' / '));
+  pruefe('der Agent merkt sich den verworfenen Hinweis', G.spieler[1].notizen.some(n => n.includes('war zu deutlich')));
+
+  console.log('\n— Ohne Spion-Test und ohne passtAuch —');
+  r = await simuliere({ spion: 2, stimmeAuf: 2, menschStimme: 2, spionTipp: 'Robbe', spionTest: false, ohnePasstAuch: true });
+  pruefe('abgeschaltet: kein Testaufruf', r.testPrompts.length === 0, String(r.testPrompts.length));
+  pruefe('fehlende passtAuch-Liste wird zurückgemeldet', r.prompts.some(t => t.includes('nicht drei andere Begriffe')));
+  pruefe('Hinweis ohne passtAuch landet nicht im Verlauf', ctx.G.verlauf.every(v => !v.text.startsWith('Ohne Liste')));
 
   console.log('\n— Partie: KI-Spion enttarnt, rät aber richtig —');
   await simuliere({ spion: 3, stimmeAuf: 3, menschStimme: 3, spionTipp: ctx.BEGRIFFE[Object.keys(ctx.BEGRIFFE)[0]][0] });

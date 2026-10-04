@@ -64,9 +64,42 @@ Wer sonst Spion ist und was die anderen Agenten notiert haben, steht in keinem s
 Der Test prüft das ausdrücklich. Verdächtigungen entstehen also nur aus den Hinweisen. Nach der
 Partie zeigt **WAS DIE KI DACHTE** die privaten Notizen jedes Agenten.
 
-Wenn ein Agent den Begriff ausplaudert, verwirft das Spiel den Hinweis und fragt bis zu zweimal neu.
-Danach kommt ein neutraler Ersatzsatz, damit das Spiel nicht hängen bleibt. Ein KI-Spion rät
-frühestens ab Runde 2, und nur wenn er sich zu mindestens 85 % sicher ist (`SPION_SCHWELLE`).
+### Taktik
+
+Ohne konkrete Anleitung greifen Sprachmodelle zur Lexikon-Definition („steht am Meer und leuchtet“).
+Deshalb bekommen die Agenten eine ausdrückliche Taktik:
+
+* **Wer den Begriff kennt**, muss einen Hinweis geben, der auch auf mindestens drei **andere**
+  Begriffe der Kategorie passt, und diese im Feld `passtAuch` nennen. Erlaubt sind Erinnerung,
+  Geräusch, Geruch, Gefühl, Nebendetail, Redewendung oder Situation. Verboten sind Funktion,
+  Aussehen, Oberbegriff und Definition. Runde 1 ist so vage wie möglich, später darf es minimal
+  konkreter werden. Ein Beispiel am Begriff „Leuchtturm“ (kommt im Spiel nicht vor) zeigt
+  schlechte und gute Hinweise.
+* **Der Spion** grenzt die passenden Begriffe Runde für Runde ein (`kandidaten`), knüpft mit
+  eigenen Worten an die Gemeinsamkeit der Hinweise an, klingt selbstsicher und ist nicht vager als
+  die anderen. Bei der Abstimmung lenkt er den Verdacht auf den Vagsten.
+* **Verdacht**: Wer den Begriff kennt, bekommt konkrete Spion-Anzeichen genannt (passt zu allem,
+  aber nicht besonders zum Begriff; übernimmt fremde Bilder; vager als nötig).
+* **Ton**: Jeder Agent hat einen eigenen, festen Ton (trocken, poetisch, frech, umständlich oder
+  kühl). Der Ton ändert die Formulierung, nicht die Taktik.
+
+### Prüfung jedes KI-Hinweises
+
+1. **Formal**: Er darf den Begriff nicht verraten, sich nicht wiederholen, und bei Wissenden muss
+   `passtAuch` mindestens zwei andere Begriffe enthalten.
+2. **Spion-Test** (Schalter auf dem Startbildschirm, standardmäßig an): Ein eigener KI-Aufruf
+   bekommt nur die Kategorie und alle Hinweise, ohne Namen und ohne Rollen, und soll den Begriff
+   raten. Errät er ihn, war der Hinweis zu deutlich. Das kostet einen zusätzlichen Aufruf pro
+   KI-Hinweis und macht die Partie spürbar langsamer.
+
+Scheitert ein Hinweis, bekommt der Agent den Grund als Rückmeldung und darf bis zu zweimal
+nachbessern. Ist danach nichts Bestandenes dabei, nimmt das Spiel den Hinweis, der nur am
+Spion-Test gescheitert ist. Gibt es auch den nicht, kommt ein neutraler Ersatzsatz, damit das
+Spiel nicht hängt. In späten Runden kann der Begriff schon aus den bisherigen Hinweisen erratbar
+sein. Dann scheitert jeder neue Hinweis am Test, und dieser Rückfall greift.
+
+Ein KI-Spion rät frühestens ab Runde 2, und nur wenn er sich zu mindestens 85 % sicher ist
+(`SPION_SCHWELLE`).
 
 Die Qualität der Hinweise und Verdächtigungen hängt am Text-Modell von Perchance. Rechne mit
 soliden, nicht mit brillanten Gegnern.
