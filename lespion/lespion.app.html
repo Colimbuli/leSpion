@@ -1,0 +1,1141 @@
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+
+:root{
+  --bg:#0b0a0f; --panel:#17141f; --panel2:#1f1b29; --border:#3a3346;
+  --rot:#c0392b; --rot2:#e74c3c; --gold:#e0b252; --text:#ece6d9; --dim:#9a92a6;
+  --gruen:#5fae7a;
+  --hoehe:100vh;
+  /* Schriften aus dem System, nicht von fonts.googleapis.com (wie in PROXIMA). */
+  --schrift-titel:'Palatino Linotype','Book Antiqua',Palatino,'Iowan Old Style','URW Palladio L',Georgia,serif;
+  --schrift-text:system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+}
+@supports(height:100dvh){:root{--hoehe:100dvh;}}
+
+html,body{width:100%;height:var(--hoehe);background:var(--bg);color:var(--text);font-family:var(--schrift-text);overflow:hidden;}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
+button{font-family:inherit;}
+
+/* ── STARTSCREEN ── */
+#start{position:fixed;inset:0;height:var(--hoehe);z-index:100;overflow-y:auto;
+  background:radial-gradient(ellipse at center,#1d1a24 0%,#08070b 100%);
+  display:flex;flex-direction:column;align-items:center;gap:14px;padding:28px 16px 40px;text-align:center;}
+#start::before,#start::after{content:'';flex:1 0 8px;}
+#start.aus{display:none;}
+#start h1{font-family:var(--schrift-titel);font-size:clamp(2.4rem,10vw,4.6rem);letter-spacing:0.2em;color:var(--gold);
+  text-shadow:0 0 36px rgba(192,57,43,0.55);}
+.sub{font-family:var(--schrift-titel);font-size:0.72rem;letter-spacing:0.24em;color:var(--dim);}
+.formular{display:flex;flex-direction:column;gap:10px;width:100%;max-width:500px;text-align:left;
+  background:rgba(23,20,31,0.85);border:1px solid var(--border);padding:16px;}
+.formular label{font-size:0.68rem;letter-spacing:0.14em;color:var(--dim);text-transform:uppercase;display:block;margin-bottom:4px;}
+.formular input,.formular select,.formular textarea,#aktion input,#aktion select,.modal-box input,.modal-box select{
+  width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);font:inherit;font-size:0.92rem;padding:8px 10px;outline:none;}
+.formular textarea{resize:vertical;min-height:3.6em;line-height:1.4;}
+.formular input:focus,.formular select:focus,.formular textarea:focus,#aktion input:focus{border-color:var(--gold);}
+.zeile{display:flex;gap:8px;align-items:flex-start;}
+.zeile>*{flex:1;min-width:0;}
+.zeile>.klein{flex:0 0 auto;}
+.gbtn{background:var(--rot);border:none;color:#fff;font-family:var(--schrift-titel);font-size:1rem;letter-spacing:0.16em;
+  padding:12px 30px;cursor:pointer;}
+.gbtn:hover{background:var(--rot2);}
+.gbtn:disabled{opacity:0.5;cursor:default;}
+.klein{background:none;border:1px solid var(--border);color:var(--dim);font-size:0.72rem;letter-spacing:0.08em;padding:7px 11px;cursor:pointer;}
+.klein:hover{color:var(--gold);border-color:var(--gold);}
+.hinweistext{font-size:0.75rem;color:var(--dim);line-height:1.45;}
+#startFehler{display:none;max-width:500px;width:100%;background:rgba(192,57,43,0.15);border:1px solid var(--rot);color:#f0b0a8;
+  padding:8px 12px;font-size:0.8rem;text-align:left;white-space:pre-wrap;}
+.version{font-size:0.62rem;letter-spacing:0.14em;color:#5d566a;}
+
+/* ── SPIEL ── */
+#spiel{position:fixed;inset:0;height:var(--hoehe);display:none;flex-direction:column;}
+#spiel.an{display:flex;}
+#kopf{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 12px;border-bottom:1px solid var(--border);background:var(--panel);}
+#kopf .titel{font-family:var(--schrift-titel);letter-spacing:0.2em;color:var(--gold);font-size:0.95rem;}
+.chip{font-size:0.72rem;letter-spacing:0.06em;padding:4px 8px;border:1px solid var(--border);background:var(--bg);white-space:nowrap;}
+.chip.rolle{border-color:var(--gold);color:var(--gold);}
+.chip.rolle.spion{border-color:var(--rot2);color:var(--rot2);}
+#kopf .rechts{margin-left:auto;display:flex;gap:6px;}
+#bereich{flex:1;min-height:0;display:flex;gap:12px;padding:12px;}
+#raster{flex:0 0 auto;height:100%;aspect-ratio:1/1;max-width:58%;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:8px;}
+.sp{position:relative;background:var(--panel2);border:2px solid var(--border);overflow:hidden;min-width:0;min-height:0;cursor:default;}
+.sp img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;}
+.sp img:not([src]),.sp img[src=""]{display:none;}
+.sp .platzhalter{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:3.2rem;color:#3a3346;}
+.sp .schild{position:absolute;left:0;right:0;bottom:0;padding:6px 8px;background:linear-gradient(transparent,rgba(0,0,0,0.85));}
+.sp .name{font-weight:600;font-size:0.9rem;}
+.sp .marke{display:inline-block;font-size:0.6rem;letter-spacing:0.1em;padding:1px 5px;margin-left:6px;border:1px solid currentColor;vertical-align:middle;}
+.sp .marke.du{color:var(--gold);}
+.sp .marke.spion{color:var(--rot2);}
+.sp .marke.ki{color:var(--dim);}
+.sp .zitat{font-size:0.78rem;color:#ddd;font-style:italic;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.sp.amzug{border-color:var(--gold);box-shadow:0 0 18px rgba(224,178,82,0.35);}
+.sp .lade{position:absolute;top:8px;right:8px;width:16px;height:16px;border:2px solid var(--gold);border-right-color:transparent;border-radius:50%;
+  animation:dreh 0.9s linear infinite;display:none;}
+.sp.zeichnet .lade{display:block;}
+.sp .denkt{position:absolute;top:8px;left:8px;font-size:0.68rem;background:rgba(0,0,0,0.7);padding:2px 6px;display:none;}
+.sp.denkend .denkt{display:block;}
+.sp.waehlbar{cursor:pointer;}
+.sp.waehlbar:hover{border-color:var(--rot2);}
+.sp.gewaehlt{border-color:var(--rot2);box-shadow:0 0 18px rgba(231,76,60,0.5);}
+.sp .stimmen{position:absolute;top:8px;right:30px;font-size:0.75rem;background:var(--rot);color:#fff;padding:2px 7px;display:none;}
+.sp.zeigtStimmen .stimmen{display:block;}
+@keyframes dreh{to{transform:rotate(360deg);}}
+
+#seite{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px;}
+#verlauf{flex:1;min-height:0;overflow-y:auto;background:var(--panel);border:1px solid var(--border);padding:10px 12px;display:flex;flex-direction:column;gap:6px;}
+.z{font-size:0.88rem;line-height:1.45;}
+.z.sys{color:var(--dim);font-size:0.78rem;}
+.z.privat{color:var(--gold);font-size:0.82rem;border-left:2px solid var(--gold);padding-left:8px;}
+.z.alarm{color:var(--rot2);}
+.z .wer{font-weight:600;margin-right:6px;}
+.z.runde{color:var(--gold);font-family:var(--schrift-titel);letter-spacing:0.18em;font-size:0.7rem;margin-top:6px;}
+#aktion{background:var(--panel);border:1px solid var(--border);padding:10px;display:flex;flex-direction:column;gap:8px;}
+#aktion .zeile{align-items:center;}
+#aktion .info{font-size:0.82rem;color:var(--dim);}
+.endknoepfe{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+#timer{font-variant-numeric:tabular-nums;font-size:0.8rem;color:var(--gold);flex:0 0 auto;}
+#timer.knapp{color:var(--rot2);}
+
+/* ── MODAL ── */
+.modal{position:fixed;inset:0;z-index:300;background:rgba(0,0,0,0.75);display:none;align-items:center;justify-content:center;padding:16px;}
+.modal.an{display:flex;}
+.modal-box{background:var(--panel);border:1px solid var(--border);max-width:560px;width:100%;max-height:90%;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:12px;}
+.modal-box h2{font-family:var(--schrift-titel);letter-spacing:0.14em;color:var(--gold);font-size:1.1rem;}
+.modal-box p,.modal-box li{font-size:0.88rem;line-height:1.5;}
+.modal-box ol,.modal-box ul{padding-left:20px;display:flex;flex-direction:column;gap:4px;}
+.modal-box .knoepfe{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;}
+.notiz{font-size:0.8rem;color:var(--dim);border-left:2px solid var(--border);padding-left:8px;}
+
+@media (max-width:800px){
+  html,body{height:auto;min-height:var(--hoehe);overflow:auto;}
+  #spiel{position:static;min-height:var(--hoehe);height:auto;}
+  #bereich{flex-direction:column;padding:8px 16px;}
+  #raster{height:auto;width:100%;max-width:none;}
+  #verlauf{min-height:220px;max-height:45vh;}
+}
+</style>
+
+<div id="start">
+  <h1>LE SPION</h1>
+  <div class="sub">EIN BEGRIFF · VIER KÖPFE · EIN SPION</div>
+  <div class="formular">
+    <div>
+      <label for="nameFeld">Dein Name</label>
+      <input id="nameFeld" maxlength="24" placeholder="z. B. Alex">
+    </div>
+    <div>
+      <label for="aussehenFeld">Dein Aussehen (für dein Porträt, Englisch wirkt am besten)</label>
+      <div class="zeile">
+        <textarea id="aussehenFeld" maxlength="300"></textarea>
+        <button class="klein" type="button" onclick="aussehenWuerfeln()" title="Zufälliges Aussehen">🎲</button>
+      </div>
+    </div>
+    <div>
+      <label for="stilwahl">Bildstil</label>
+      <select id="stilwahl" onchange="stilGewechselt()"></select>
+      <input id="stilEigen" style="display:none;margin-top:6px" placeholder="eigener Stil, z. B. charcoal sketch, high contrast">
+    </div>
+    <div class="zeile">
+      <div>
+        <label for="rundenwahl">Runden</label>
+        <select id="rundenwahl">
+          <option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option>
+        </select>
+      </div>
+      <div>
+        <label for="zeitwahl">Zeit pro Zug</label>
+        <select id="zeitwahl">
+          <option value="0">ohne Limit</option><option value="30">30 s</option><option value="60" selected>60 s</option>
+          <option value="90">90 s</option><option value="120">120 s</option>
+        </select>
+      </div>
+    </div>
+    <div class="hinweistext">Modus: <b>Einzelspieler</b> – du und drei KI-Agenten. Die Rollen werden zufällig verteilt, auch du kannst der Spion sein. Mehrspieler folgt.</div>
+  </div>
+  <button class="gbtn" id="startKnopf" type="button" onclick="partieStarten()">PARTIE STARTEN</button>
+  <button class="klein" type="button" onclick="oeffneRegeln()">REGELN</button>
+  <div id="startFehler"></div>
+  <div class="version" id="versionStart">LE SPION V0.1</div>
+</div>
+
+<div id="spiel">
+  <div id="kopf">
+    <span class="titel">LE SPION</span>
+    <span class="chip" id="kopfKategorie"></span>
+    <span class="chip rolle" id="kopfRolle"></span>
+    <span class="chip" id="kopfRunde"></span>
+    <span class="rechts">
+      <button class="klein" type="button" onclick="oeffneStil()" title="Bildstil ändern">🎨 STIL</button>
+      <button class="klein" type="button" onclick="oeffneRegeln()">? REGELN</button>
+      <button class="klein" type="button" onclick="partieAbbrechen()">✕ BEENDEN</button>
+    </span>
+  </div>
+  <div id="bereich">
+    <div id="raster"></div>
+    <div id="seite">
+      <div id="verlauf"></div>
+      <div id="aktion"></div>
+    </div>
+  </div>
+</div>
+
+<div id="modal" class="modal"><div class="modal-box" id="modalInhalt"></div></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// LE SPION — Einzelspieler-Fassung
+// Bildmechanik (Stile, Seed, Negativprompt, Perchance-Plugin image()) und
+// KI-Aufruf (ai()) stammen aus PROXIMA. Raeume, Akte und fremde Bildquellen
+// sind bewusst weggelassen.
+// ═══════════════════════════════════════════════════════════════════════════
+var VERSION='V0.1';
+
+// ── STILE (aus PROXIMA) ─────────────────────────────────────────────────────
+var STILE = {
+  manga:       'anime manga style, cel shaded, clean bold linework, vibrant colors, expressive face',
+  comic:       'western comic book style, bold ink outlines, dynamic shading, saturated colors',
+  aquarell:    'watercolor painting, soft washes, delicate brushwork, muted colors, textured paper',
+  oel:         'classical oil painting, rich texture, dramatic chiaroscuro lighting, painterly brushstrokes',
+  realistisch: 'candid 35mm film photograph, Fujifilm Provia, natural light, fine film grain, documentary realism',
+  pixel:       'detailed pixel art, 16-bit retro game style, limited palette, crisp pixels',
+  noir:        'film noir illustration, black and white, hard shadows, venetian blind light, 1940s mood',
+  illustrious: 'masterpiece, best quality, amazing quality, very aesthetic, absurdres, highly detailed, anime style'
+};
+var STIL_NAMEN = {manga:'Manga',comic:'Comic',aquarell:'Aquarell',oel:'Ölgemälde',realistisch:'Realistisch (Foto)',
+  pixel:'Pixel-Art',noir:'Film noir',illustrious:'Illustrious / Anime-Tags',eigen:'Eigener Stil …'};
+var STIL_NEGATIV = {
+  realistisch: 'illustration, painting, drawing, 3d render, cgi, airbrushed skin, retouched, plastic skin, over-sharpened, hdr'
+};
+var NEGATIV='low quality, worst quality, blurry, deformed, bad anatomy, extra limbs, extra fingers, text, watermark, signature, multiple people';
+
+// ── MIMIK UND KOPFHALTUNG ───────────────────────────────────────────────────
+// Die Porträts aendern sich im Spiel: Nach jedem Zug zeichnet der Rechner das
+// Bild des Sprechers mit neuer Miene und Kopfhaltung. Der Seed bleibt, damit
+// das Gesicht moeglichst wiedererkennbar bleibt.
+var MIMIK = {
+  neutral:       {label:'neutral',        prompt:'neutral calm expression'},
+  laechelnd:     {label:'lächelnd',       prompt:'friendly smile'},
+  nachdenklich:  {label:'nachdenklich',   prompt:'thoughtful expression, slightly furrowed brow'},
+  misstrauisch:  {label:'misstrauisch',   prompt:'suspicious expression, narrowed eyes, side glance'},
+  ueberrascht:   {label:'überrascht',     prompt:'surprised expression, raised eyebrows'},
+  nervoes:       {label:'nervös',         prompt:'nervous expression, uneasy tight smile'},
+  selbstsicher:  {label:'selbstsicher',   prompt:'confident expression, slight smirk'},
+  verschmitzt:   {label:'verschmitzt',    prompt:'mischievous grin, playful eyes'},
+  triumphierend: {label:'triumphierend',  prompt:'triumphant expression, big satisfied grin'},
+  enttaeuscht:   {label:'enttäuscht',     prompt:'disappointed expression, frowning, looking down'}
+};
+// Was die Agenten waehrend der Hinweisrunden waehlen duerfen.
+var MIMIK_SPIEL = ['neutral','laechelnd','nachdenklich','misstrauisch','ueberrascht','nervoes','selbstsicher','verschmitzt'];
+var KOPF = [
+  'facing the viewer',
+  'head turned slightly to the left',
+  'head turned slightly to the right',
+  'head tilted to one side',
+  'chin lowered, looking up at the viewer',
+  'chin raised, looking down at the viewer'
+];
+var PORTRAET_RAHMEN='head and shoulders portrait, single person, plain dark background';
+
+// ── BEGRIFFE ────────────────────────────────────────────────────────────────
+// Feste Liste: ein KI-erzeugter Begriff waere zu unzuverlaessig. Nur einzelne
+// Woerter, damit Tipp-Abgleich und Verraets-Pruefung sauber greifen.
+var BEGRIFFE = {
+  'Orte':            ['Bahnhof','Flughafen','Krankenhaus','Bibliothek','Kino','Strand','Friedhof','Zirkus','Museum','Gefängnis','Schwimmbad','Bäckerei','Zoo','Kirche'],
+  'Tiere':           ['Elefant','Pinguin','Giraffe','Krokodil','Eichhörnchen','Hai','Fledermaus','Schnecke','Papagei','Igel','Känguru','Biene','Eule','Delfin'],
+  'Berufe':          ['Feuerwehrmann','Zahnarzt','Pilot','Bäcker','Friseur','Richter','Astronaut','Gärtner','Detektiv','Clown','Koch','Lehrer','Briefträger','Tierarzt'],
+  'Essen':           ['Pizza','Spaghetti','Brezel','Sushi','Pfannkuchen','Schokolade','Popcorn','Suppe','Bratwurst','Eis','Apfelstrudel','Käse','Honig','Croissant'],
+  'Im Haushalt':     ['Kühlschrank','Staubsauger','Toaster','Bügeleisen','Wecker','Spiegel','Kerze','Regenschirm','Waschmaschine','Schlüssel','Kissen','Teekanne','Besen','Lampe'],
+  'Sport':           ['Fußball','Tennis','Schach','Boxen','Skifahren','Golf','Surfen','Fechten','Bowling','Marathon','Klettern','Reiten','Eishockey','Yoga'],
+  'Fahrzeuge':       ['Fahrrad','Hubschrauber','Ubahn','Traktor','Segelboot','Feuerwehrauto','Rakete','Kutsche','Motorrad','Seilbahn','Taxi','Kreuzfahrtschiff','Skateboard','Zeppelin'],
+  'Musikinstrumente':['Klavier','Geige','Schlagzeug','Trompete','Gitarre','Harfe','Dudelsack','Flöte','Akkordeon','Orgel','Triangel','Saxophon','Kontrabass','Mundharmonika'],
+  'Natur':           ['Vulkan','Regenbogen','Gletscher','Wüste','Wasserfall','Gewitter','Höhle','Sonnenuntergang','Nebel','Moor','Insel','Lawine','Polarlicht','Ebbe'],
+  'Kleidung':        ['Krawatte','Gummistiefel','Badehose','Zylinder','Handschuh','Schal','Bademantel','Sandale','Brille','Uniform','Pyjama','Kapuzenpulli','Hosenträger','Taucheranzug'],
+  'Werkzeuge':       ['Hammer','Schraubenzieher','Säge','Zange','Wasserwaage','Bohrmaschine','Schaufel','Leiter','Pinsel','Maßband','Axt','Lupe','Kompass','Schere'],
+  'Freizeit':        ['Camping','Karaoke','Puzzle','Angeln','Picknick','Kartenspiel','Achterbahn','Tanzen','Stricken','Sauna','Minigolf','Zelten','Drachensteigen','Grillen'],
+  'Feste':           ['Weihnachten','Hochzeit','Geburtstag','Silvester','Karneval','Ostern','Halloween','Oktoberfest','Taufe','Abiball','Polterabend','Erntedank','Jahrmarkt','Muttertag'],
+  'Märchen & Sagen': ['Drache','Hexe','Einhorn','Zwerg','Riese','Meerjungfrau','Vampir','Zauberer','Fee','Werwolf','Kobold','Ritter','Prinzessin','Gespenst']
+};
+
+// ── PERSONAS FUER DIE KI-AGENTEN ────────────────────────────────────────────
+var VORNAMEN = {
+  w:['Margot','Ines','Yasmin','Clara','Oksana','Lotte','Amélie','Selin','Greta','Nadia','Vera','Paulina'],
+  m:['Henri','Jonas','Malik','Viktor','Emil','Tarek','Bruno','Lucien','Anton','Kenji','Oskar','Ruben']
+};
+var ALTER = ['in their twenties','in their thirties','in their forties','in their fifties','in their sixties'];
+var HAAR = ['short black hair','long red hair','curly brown hair','slicked-back grey hair','blonde bob haircut','shaved head',
+  'messy dark hair','braided auburn hair','silver ponytail','wavy chestnut hair'];
+var MERKMAL = ['round glasses','a thin moustache','freckles','a scar on the cheek','a stubble beard','sharp cheekbones',
+  'a mole above the lip','thick eyebrows','a monocle','small earrings'];
+var KLEIDUNG = ['a beige trench coat','a black turtleneck','a tweed jacket','a leather jacket','a white shirt and suspenders',
+  'a dark suit and tie','a knitted cardigan','a hooded raincoat','a red scarf and wool coat','a velvet blazer'];
+
+// ── KONFIGURATION (pro Browser) ─────────────────────────────────────────────
+var CFG_KEY='lespion_cfg_v1';
+var CFG={name:'',aussehen:'',stil:'noir',stilEigen:'',runden:3,zugZeit:60};
+function ladeCfg(){
+  try{ var r=localStorage.getItem(CFG_KEY); if(r)Object.assign(CFG,JSON.parse(r)); }catch(e){}
+}
+function speichereCfg(){
+  try{ localStorage.setItem(CFG_KEY,JSON.stringify(CFG)); }catch(e){}
+}
+
+// ── HILFEN ──────────────────────────────────────────────────────────────────
+function el(id){ return document.getElementById(id); }
+function zufall(n){ return Math.floor(Math.random()*n); }
+function wuerfeln(liste){ return liste[zufall(liste.length)]; }
+function mischen(liste){
+  var a=liste.slice();
+  for(var i=a.length-1;i>0;i--){ var j=zufall(i+1), t=a[i]; a[i]=a[j]; a[j]=t; }
+  return a;
+}
+function warte(ms){ return new Promise(function(r){ setTimeout(r,ms); }); }
+function escapeHtml(s){
+  return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function neuerSeed(){ return 1+zufall(2147483646); }
+
+// Vergleichsform: klein, Umlaute ausgeschrieben, nur Buchstaben/Ziffern.
+function norm(s){
+  return String(s||'').toLowerCase()
+    .replace(/ä/g,'ae').replace(/ö/g,'oe').replace(/ü/g,'ue').replace(/ß/g,'ss')
+    .replace(/[àáâ]/g,'a').replace(/[èéê]/g,'e').replace(/[ìíî]/g,'i').replace(/[òóô]/g,'o').replace(/[ùúû]/g,'u')
+    .replace(/[^a-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim();
+}
+function ohneArtikel(s){ return s.replace(/^(der|die|das|ein|eine|einen|einem|den|dem|des)\s+/,''); }
+function levenshtein(a,b){
+  if(a===b)return 0;
+  if(!a.length)return b.length;
+  if(!b.length)return a.length;
+  var vor=[],i,j;
+  for(j=0;j<=b.length;j++)vor[j]=j;
+  for(i=1;i<=a.length;i++){
+    var akt=[i];
+    for(j=1;j<=b.length;j++){
+      akt[j]=Math.min(vor[j]+1,akt[j-1]+1,vor[j-1]+(a[i-1]===b[j-1]?0:1));
+    }
+    vor=akt;
+  }
+  return vor[b.length];
+}
+function stammForm(s){ return s.replace(/(en|er|n|e|s)$/,''); }
+// Ist der Tipp des Spions der Begriff? Tolerant gegen Artikel, Gross-/Klein-
+// schreibung, Umlaut-Schreibweisen, Plural und einen Tippfehler.
+function tippRichtig(tipp,begriff){
+  var a=ohneArtikel(norm(tipp)).replace(/ /g,''), b=ohneArtikel(norm(begriff)).replace(/ /g,'');
+  if(!a||!b)return false;
+  if(a===b)return true;
+  if(stammForm(a)===stammForm(b))return true;
+  return b.length>=6 && levenshtein(a,b)<=1;
+}
+function gemeinsamerAnfang(a,b){
+  var n=0;
+  while(n<a.length&&n<b.length&&a[n]===b[n])n++;
+  return n;
+}
+// Verraet ein Hinweis den Begriff? Das Wort selbst, ein Wortteil davon, ein
+// Wort mit langem gemeinsamem Anfang (Feuerwehr… bei Feuerwehrmann) oder ein
+// Beinahe-Treffer gelten als Verrat.
+function verraetBegriff(text,begriff){
+  var t=norm(text), b=norm(begriff).replace(/ /g,'');
+  if(!t||!b)return false;
+  if(t.replace(/ /g,'').indexOf(b)>=0)return true;
+  var noetig=Math.max(b.length<=4?4:5,Math.ceil(b.length*0.65));
+  return t.split(' ').some(function(w){
+    if(w.length<4)return false;
+    if(gemeinsamerAnfang(w,b)>=noetig)return true;
+    if(b.length>=6&&levenshtein(w,b)<=1)return true;
+    return false;
+  });
+}
+// Erstes {...} aus einer KI-Antwort lesen; Sprachmodelle schreiben gern
+// Erklaerungen oder Codezaune drumherum.
+function jsonAus(text){
+  var s=String(text||'');
+  var a=s.indexOf('{'), e=s.lastIndexOf('}');
+  if(a<0||e<=a)return null;
+  var kern=s.substring(a,e+1);
+  try{ return JSON.parse(kern); }catch(e1){}
+  try{ return JSON.parse(kern.replace(/,\s*}/g,'}').replace(/[“”„]/g,'"')); }catch(e2){}
+  return null;
+}
+function kurz(s,max){
+  s=String(s||'').replace(/\s+/g,' ').trim().replace(/^["'„“»«]+|["'„“»«]+$/g,'');
+  return s.length>max?s.substring(0,max).replace(/\s+\S*$/,'')+'…':s;
+}
+
+// ── KI-WRAPPER (aus PROXIMA) ────────────────────────────────────────────────
+function extrahiereText(x){
+  if(x==null)return'';
+  if(typeof x==='string')return x;
+  return x.fullText||x.text||x.output||'';
+}
+function pluginLage(){
+  var lader=(typeof window!=='undefined')&&window.LESPION_LADER;
+  if(!lader||typeof lader.plugins!=='function')return 'ohne Ladeschale';
+  var b=lader.plugins()||{};
+  return 'Ladeschale '+(lader.version||'?')+': '+Object.keys(b).map(function(k){return k+'() '+b[k];}).join(', ');
+}
+function kiNochNichtBereit(e){
+  var m=String((e&&e.message)||e||'');
+  return /contentWindow|streamTextFromIframe|of null|not defined/i.test(m);
+}
+async function frageKI(prompt,timeoutMs){
+  var letzter=null;
+  for(var versuch=0;versuch<3;versuch++){
+    try{
+      return await frageKIEinmal(prompt,timeoutMs);
+    }catch(e){
+      letzter=e;
+      if(!kiNochNichtBereit(e))throw e;
+      await warte(1200*(versuch+1));
+    }
+  }
+  throw new Error('Das Text-Plugin von Perchance war nicht bereit ('+((letzter&&letzter.message)||'unbekannt')+'). '+pluginLage());
+}
+function frageKIEinmal(prompt,timeoutMs){
+  var limit=timeoutMs||90000;
+  return new Promise(function(resolve,reject){
+    var fertig=false;
+    var timer=setTimeout(function(){
+      if(!fertig){fertig=true;reject(new Error('KI-Timeout ('+Math.round(limit/1000)+'s)'));}
+    },limit);
+    function done(txt){
+      if(fertig)return;fertig=true;clearTimeout(timer);
+      resolve(String(txt||'').trim());
+    }
+    function versucheObjektForm(){
+      try{
+        ai({instruction:prompt,onFinish:function(data){done(extrahiereText(data));}});
+      }catch(e2){
+        if(!fertig){fertig=true;clearTimeout(timer);reject(e2);}
+      }
+    }
+    try{
+      var r=ai(prompt);
+      if(r&&typeof r.then==='function'){
+        r.then(function(res){done(extrahiereText(res));})
+         .catch(function(){versucheObjektForm();});
+      }else if(typeof r==='string'&&r.length){done(r);}
+      else{versucheObjektForm();}
+    }catch(e){versucheObjektForm();}
+  });
+}
+
+// ── BILDER ──────────────────────────────────────────────────────────────────
+function aktuellerStil(){
+  if(CFG.stil==='eigen')return (CFG.stilEigen||'').trim()||STILE.noir;
+  return STILE[CFG.stil]||STILE.noir;
+}
+function baueNegativ(){
+  var extra=STIL_NEGATIV[CFG.stil];
+  return NEGATIV+(extra?', '+extra:'');
+}
+function portraetPrompt(sp){
+  var m=MIMIK[sp.mimik]||MIMIK.neutral;
+  var aussehen=String(sp.aussehen||'a person').trim().replace(/[.\s]+$/,'');
+  return aussehen+', '+m.prompt+', '+(sp.kopf||KOPF[0])+', '+PORTRAET_RAHMEN+', '+aktuellerStil();
+}
+// Nur das Perchance-Bild-Plugin. Seed und Negativprompt gehen wie in PROXIMA
+// in der Schreibweise (name:::wert) am Prompt mit.
+async function zeichneMitPlugin(prompt,negativ,seed){
+  if(typeof image!=='function')throw new Error('image() ist nicht verfügbar — Bild-Plugin im Generator eingebunden? '+pluginLage());
+  var p=prompt+(negativ?' (negativePrompt:::'+negativ+')':'')+' (seed:::'+seed+')';
+  var r=await image({prompt:p});
+  var src=r&&(r.dataUrl||r.url||r.imageUrl||r.src);
+  if(!src)throw new Error('Bild-Plugin lieferte keine Bilddaten.');
+  return src;
+}
+// Warteschlange: immer nur ein Bild gleichzeitig (Perchance drosselt sonst).
+// Pro Spieler zaehlt nur der neueste Wunsch - die Miene wird erst beim
+// Zeichnen gelesen, ein veralteter Auftrag entfaellt also von selbst.
+var BILD={laeuft:false,wartend:[],fehlerGemeldet:false};
+function bildAnfordern(i){
+  if(BILD.wartend.indexOf(i)<0)BILD.wartend.push(i);
+  zeigeKarte(i);
+  bildPumpe();
+}
+async function bildPumpe(){
+  if(BILD.laeuft||!BILD.wartend.length)return;
+  var i=BILD.wartend.shift(), partie=G.id, sp=G.spieler[i];
+  if(!sp){ bildPumpe(); return; }
+  BILD.laeuft=true;
+  sp.zeichnet=true;
+  zeigeKarte(i);
+  try{
+    var src=await zeichneMitPlugin(portraetPrompt(sp),baueNegativ(),sp.seed);
+    if(partie===G.id){ sp.bild=src; }
+  }catch(e){
+    if(!BILD.fehlerGemeldet&&partie===G.id){
+      BILD.fehlerGemeldet=true;
+      zeile('sys','⚠︎ Porträt konnte nicht gezeichnet werden: '+((e&&e.message)||e)+' — das Spiel läuft ohne Bilder weiter.');
+    }
+  }
+  BILD.laeuft=false;
+  sp.zeichnet=false;
+  if(partie===G.id)zeigeKarte(i);
+  bildPumpe();
+}
+function neueMiene(i,mimik){
+  var sp=G.spieler[i];
+  if(!sp)return;
+  sp.mimik=MIMIK[mimik]?mimik:'neutral';
+  var andere=KOPF.filter(function(k){ return k!==sp.kopf; });
+  sp.kopf=wuerfeln(andere);
+  bildAnfordern(i);
+}
+
+// ── SPIELZUSTAND ────────────────────────────────────────────────────────────
+// Sitzordnung im 2x2-Raster: 0 oben links, 1 oben rechts, 2 unten links,
+// 3 unten rechts. Gesprochen wird im Uhrzeigersinn: 0 → 1 → 3 → 2.
+var UHRZEIGER=[0,1,3,2];
+var G={id:0,phase:'start',spieler:[]};
+
+function reihenfolgeAb(start){
+  var p=UHRZEIGER.indexOf(start);
+  return [0,1,2,3].map(function(k){ return UHRZEIGER[(p+k)%4]; });
+}
+function zufallsPersona(belegt){
+  var g=Math.random()<0.5?'w':'m';
+  var namen=VORNAMEN[g].filter(function(n){ return belegt.indexOf(n)<0; });
+  var name=wuerfeln(namen);
+  var wer=g==='w'?'a woman':'a man';
+  return {
+    name:name,
+    aussehen:wer+' '+wuerfeln(ALTER)+', '+wuerfeln(HAAR)+', '+wuerfeln(MERKMAL)+', wearing '+wuerfeln(KLEIDUNG)
+  };
+}
+function zufallsAussehen(){
+  return zufallsPersona([]).aussehen.replace(/^a (woman|man)/,function(m){ return Math.random()<0.5?m:'a person'; });
+}
+// Baut eine neue Partie. Reine Logik ohne DOM, damit sie testbar bleibt.
+function neuePartie(opt){
+  opt=opt||{};
+  var kategorien=Object.keys(BEGRIFFE);
+  var kategorie=opt.kategorie||wuerfeln(kategorien);
+  var begriff=opt.begriff||wuerfeln(BEGRIFFE[kategorie]);
+  var spion=(opt.spion!=null)?opt.spion:zufall(4);
+  var belegt=[opt.name||'Du'];
+  var spieler=[];
+  for(var i=0;i<4;i++){
+    var p;
+    if(i===0){
+      p={name:opt.name||'Du',aussehen:opt.aussehen||zufallsAussehen()};
+    }else{
+      p=zufallsPersona(belegt);
+    }
+    belegt.push(p.name);
+    spieler.push({
+      idx:i, name:p.name, aussehen:p.aussehen, mensch:(i===0), spion:(i===spion),
+      seed:neuerSeed(), mimik:'neutral', kopf:KOPF[0], bild:'',
+      letzterHinweis:'', notizen:[], verdacht:'', denkt:false
+    });
+  }
+  var start=(opt.start!=null)?opt.start:zufall(4);
+  return {
+    id:(G.id||0)+1, phase:'beschreiben', spieler:spieler, kategorie:kategorie, begriff:begriff, spion:spion,
+    runden:opt.runden||3, runde:0, reihenfolge:reihenfolgeAb(start), amZug:-1,
+    verlauf:[], spionTipp:null, stimmen:{}, beschuldigt:null, ergebnis:null
+  };
+}
+
+// ── PROMPTS FUER DIE AGENTEN ────────────────────────────────────────────────
+// Jeder Agent bekommt einen EIGENEN Aufruf. Darin steht nur, was er selbst
+// weiss: seine Rolle, die Kategorie, den Begriff (ausser er ist Spion), die
+// oeffentlichen Hinweise und seine eigenen Notizen. Wer sonst Spion ist,
+// steht in keinem Prompt.
+function namensListe(){ return G.spieler.map(function(s){ return s.name; }).join(', '); }
+function oeffentlicherVerlauf(){
+  var h=G.verlauf.filter(function(v){ return v.typ==='hinweis'; });
+  if(!h.length)return '(noch keine — du beginnst)';
+  return h.map(function(v){ return 'Runde '+v.runde+' – '+v.name+': "'+v.text+'"'; }).join('\n');
+}
+function eigeneNotizen(sp){
+  if(!sp.notizen.length)return '(keine)';
+  return sp.notizen.slice(-6).map(function(n){ return '- '+n; }).join('\n');
+}
+function rollenText(sp){
+  var kopf='Du spielst das Partyspiel „Le Spion" mit vier Personen: '+namensListe()+'. Du bist '+sp.name+'.\n'+
+    'Die Kategorie ist „'+G.kategorie+'".\n';
+  if(sp.spion){
+    return kopf+'DU BIST DER SPION. Du kennst den geheimen Begriff NICHT, nur die Kategorie. '+
+      'Die anderen drei kennen ihn. Niemand weiß, dass du der Spion bist – die anderen versuchen es herauszufinden.\n';
+  }
+  return kopf+'Der geheime Begriff lautet „'+G.begriff+'". Einer der vier Spieler ist der Spion und kennt den Begriff nicht. '+
+    'Wer der Spion ist, weißt du NICHT – du kennst nur deine eigene Rolle und kannst nur Vermutungen anstellen.\n';
+}
+function baueHinweisPrompt(i){
+  var sp=G.spieler[i];
+  var mimiken=MIMIK_SPIEL.join(', ');
+  var t=rollenText(sp)+'\n'+
+    'Reihum gibt jeder einen kurzen Hinweis auf den Begriff.\n';
+  if(sp.spion){
+    t+='Dein Ziel: Gib einen Hinweis, der zu den bisherigen passt, damit du nicht auffällst, und finde aus den Hinweisen '+
+       'der anderen heraus, was der Begriff ist.\n';
+  }else{
+    t+='Dein Ziel: Zeig mit deinem Hinweis, dass du den Begriff kennst – aber so indirekt, dass der Spion ihn daraus '+
+       'nicht erraten kann. Achte auf Hinweise, die verdächtig vage sind oder nicht passen.\n';
+  }
+  t+='\nBISHERIGE HINWEISE:\n'+oeffentlicherVerlauf()+'\n\n'+
+    'DEINE PRIVATEN NOTIZEN (nur du kennst sie):\n'+eigeneNotizen(sp)+'\n\n'+
+    'Jetzt bist du dran (Runde '+G.runde+' von '+G.runden+').\n'+
+    'Regeln für deinen Hinweis: höchstens acht Wörter, auf Deutsch, '+
+    (sp.spion?'':'nenne niemals den Begriff selbst, keinen Wortteil davon und keine Übersetzung, ')+
+    'wiederhole keinen bisherigen Hinweis.\n\n'+
+    'Antworte NUR mit einem JSON-Objekt, ohne weiteren Text:\n';
+  if(sp.spion){
+    t+='{"hinweis":"…","mimik":"<eins von: '+mimiken+'>","vermutung":"<dein bester Tipp für den Begriff, ein Wort>",'+
+       '"sicherheit":<0 bis 100, wie sicher du beim Tipp bist>,"notiz":"<ein Satz private Überlegung>"}';
+  }else{
+    t+='{"hinweis":"…","mimik":"<eins von: '+mimiken+'>","verdacht":"<Name, den du gerade für den Spion hältst, oder leer>",'+
+       '"notiz":"<ein Satz private Überlegung>"}';
+  }
+  return t;
+}
+function baueStimmPrompt(i){
+  var sp=G.spieler[i];
+  var andere=G.spieler.filter(function(s){ return s.idx!==i; }).map(function(s){ return s.name; });
+  return rollenText(sp)+'\n'+
+    'Die Hinweisrunden sind vorbei. Jetzt stimmt jeder ab, wer der Spion ist.\n'+
+    (sp.spion?'Du bist der Spion: Stimme für jemand anderen, so dass der Verdacht nicht auf dich fällt.\n'
+             :'Du selbst bist es nicht. Wer hat Hinweise gegeben, die den Begriff nicht wirklich zu kennen scheinen?\n')+
+    '\nALLE HINWEISE:\n'+oeffentlicherVerlauf()+'\n\n'+
+    'DEINE PRIVATEN NOTIZEN:\n'+eigeneNotizen(sp)+'\n\n'+
+    'Wähle genau einen dieser Namen: '+andere.join(', ')+'.\n'+
+    'Antworte NUR mit einem JSON-Objekt: {"stimme":"<Name>","begruendung":"<ein Satz>"}';
+}
+function baueTippPrompt(i,letzteChance){
+  var sp=G.spieler[i];
+  return rollenText(sp)+'\n'+
+    (letzteChance?'Du wurdest als Spion enttarnt. Du hast genau einen letzten Versuch, den Begriff zu erraten. '+
+                  'Triffst du, gewinnst du trotzdem.\n'
+                 :'Du darfst jetzt den Begriff raten.\n')+
+    '\nALLE HINWEISE:\n'+oeffentlicherVerlauf()+'\n\n'+
+    'DEINE PRIVATEN NOTIZEN:\n'+eigeneNotizen(sp)+'\n\n'+
+    'Antworte NUR mit einem JSON-Objekt: {"tipp":"<ein Wort aus der Kategorie '+G.kategorie+'>"}';
+}
+
+// ── ANTWORTEN DER AGENTEN AUSWERTEN ─────────────────────────────────────────
+var NOTFALL_HINWEISE = {
+  wissend:['Kenne ich besser, als mir lieb ist.','Da habe ich sofort ein Bild im Kopf.','Hatte ich schon oft mit zu tun.'],
+  spion:['Passt gut zu dem, was schon gesagt wurde.','Da muss ich gar nicht lange überlegen.','Sehe ich ähnlich wie ihr.']
+};
+function mimikAus(wert){
+  var n=norm(wert).replace(/ /g,'');
+  if(MIMIK[n])return n;
+  for(var k in MIMIK){ if(norm(MIMIK[k].label).replace(/ /g,'')===n)return k; }
+  return 'nachdenklich';
+}
+function nameAus(wert,ausser){
+  var n=norm(wert);
+  if(!n)return -1;
+  for(var i=0;i<G.spieler.length;i++){
+    if(i===ausser)continue;
+    if(n.indexOf(norm(G.spieler[i].name))>=0)return i;
+  }
+  return -1;
+}
+function hinweisGueltig(sp,text){
+  if(!text)return false;
+  if(!sp.spion&&verraetBegriff(text,G.begriff))return false;
+  var n=norm(text);
+  return !G.verlauf.some(function(v){ return v.typ==='hinweis'&&norm(v.text)===n; });
+}
+// Fragt den Agenten nach seinem Hinweis. Verraet er den Begriff oder kommt
+// nichts Brauchbares, wird bis zu zweimal nachgefragt; danach greift ein
+// neutraler Ersatz, damit das Spiel nicht haengt.
+async function agentHinweis(i){
+  var sp=G.spieler[i], antwort=null;
+  for(var versuch=0;versuch<3;versuch++){
+    var roh='';
+    try{ roh=await frageKI(baueHinweisPrompt(i)); }catch(e){ roh=''; }
+    var j=jsonAus(roh);
+    var text=kurz(j&&j.hinweis?j.hinweis:(roh&&!j?roh.split('\n')[0]:''),90);
+    if(hinweisGueltig(sp,text)){ antwort=j||{}; antwort.hinweis=text; break; }
+  }
+  if(!antwort){
+    antwort={hinweis:wuerfeln(NOTFALL_HINWEISE[sp.spion?'spion':'wissend']),mimik:'nachdenklich'};
+  }
+  if(antwort.notiz)sp.notizen.push('Runde '+G.runde+': '+kurz(antwort.notiz,200));
+  if(!sp.spion){
+    var v=nameAus(antwort.verdacht,i);
+    sp.verdacht=v>=0?G.spieler[v].name:'';
+    if(sp.verdacht)sp.notizen.push('Runde '+G.runde+': Verdacht gerade auf '+sp.verdacht+'.');
+  }else{
+    sp.vermutung=kurz(antwort.vermutung,40);
+    var s=parseInt(antwort.sicherheit,10);
+    sp.sicherheit=isNaN(s)?0:Math.max(0,Math.min(100,s));
+    if(sp.vermutung)sp.notizen.push('Runde '+G.runde+': Tippe auf „'+sp.vermutung+'" ('+sp.sicherheit+' %).');
+  }
+  return {text:antwort.hinweis,mimik:mimikAus(antwort.mimik)};
+}
+// Der KI-Spion raet erst ab Runde 2 und nur, wenn er sich sehr sicher ist.
+var SPION_SCHWELLE=85;
+function kiSpionRaetJetzt(sp){
+  return sp.spion&&!sp.mensch&&G.runde>=2&&!!sp.vermutung&&(sp.sicherheit||0)>=SPION_SCHWELLE;
+}
+async function agentStimme(i){
+  var sp=G.spieler[i], ziel=-1, grund='';
+  try{
+    var j=jsonAus(await frageKI(baueStimmPrompt(i)));
+    if(j){ ziel=nameAus(j.stimme,i); grund=kurz(j.begruendung,200); }
+  }catch(e){}
+  if(ziel<0&&sp.verdacht)ziel=nameAus(sp.verdacht,i);
+  if(ziel<0){
+    var andere=[0,1,2,3].filter(function(k){ return k!==i; });
+    ziel=wuerfeln(andere);
+    grund=grund||'(keine klare Antwort – Zufallsstimme)';
+  }
+  if(grund)sp.notizen.push('Abstimmung: '+grund);
+  return ziel;
+}
+async function agentTipp(i,letzteChance){
+  var sp=G.spieler[i];
+  try{
+    var j=jsonAus(await frageKI(baueTippPrompt(i,letzteChance)));
+    if(j&&j.tipp)return kurz(j.tipp,40);
+  }catch(e){}
+  return sp.vermutung||'';
+}
+// Stimmen auszaehlen: nur eine eindeutige Mehrheit beschuldigt jemanden.
+// Gleichstand heisst: niemand wird enttarnt.
+function auszaehlen(stimmen){
+  var z=[0,0,0,0];
+  Object.keys(stimmen).forEach(function(k){ var v=stimmen[k]; if(v>=0&&v<4)z[v]++; });
+  var max=Math.max.apply(null,z);
+  var oben=z.map(function(n,i){ return n===max?i:-1; }).filter(function(i){ return i>=0; });
+  return {zaehlung:z,beschuldigt:(max>0&&oben.length===1)?oben[0]:null};
+}
+
+// ── ABLAUF ──────────────────────────────────────────────────────────────────
+function laeuft(partie){ return G.id===partie&&G.phase==='beschreiben'; }
+async function spielLaufen(){
+  var partie=G.id;
+  for(var r=1;r<=G.runden;r++){
+    if(!laeuft(partie))return;
+    G.runde=r;
+    zeigeKopf();
+    zeile('runde','RUNDE '+r+' VON '+G.runden);
+    for(var k=0;k<4;k++){
+      if(!laeuft(partie))return;
+      var i=G.reihenfolge[k];
+      await zug(i,partie);
+    }
+  }
+  if(!laeuft(partie))return;
+  await abstimmung(partie);
+}
+async function zug(i,partie){
+  var sp=G.spieler[i];
+  G.amZug=i;
+  zeigeAlleKarten();
+  var ergebnis;
+  if(sp.mensch){
+    ergebnis=await menschZug(i);
+  }else{
+    sp.denkt=true; zeigeKarte(i);
+    ergebnis=await agentHinweis(i);
+    sp.denkt=false;
+  }
+  if(!laeuft(partie))return;
+  sp.letzterHinweis=ergebnis.text;
+  G.verlauf.push({typ:'hinweis',runde:G.runde,idx:i,name:sp.name,text:ergebnis.text});
+  zeile('hinweis',ergebnis.text,sp);
+  neueMiene(i,ergebnis.mimik);
+  G.amZug=-1;
+  zeigeAlleKarten();
+  if(kiSpionRaetJetzt(sp)){
+    zeile('sys','🕵 '+sp.name+' lehnt sich zurück und schreibt etwas auf einen Zettel …');
+    beendeMitTipp(i,sp.vermutung,false);
+  }
+}
+// Verdeckter Tipp des Spions waehrend der Runden (Mensch oder KI).
+function beendeMitTipp(i,tipp,letzteChance){
+  var richtig=tippRichtig(tipp,G.begriff);
+  G.spionTipp={idx:i,tipp:tipp,richtig:richtig,letzteChance:!!letzteChance};
+  beende(richtig?'spion':'team',
+    letzteChance
+      ?(richtig?'Enttarnt – aber '+G.spieler[i].name+' errät den Begriff mit „'+tipp+'" doch noch.'
+               :'Enttarnt! Der letzte Tipp „'+tipp+'" ist falsch.')
+      :(richtig?G.spieler[i].name+' tippt verdeckt auf „'+tipp+'" – richtig! Der Spion gewinnt.'
+               :G.spieler[i].name+' tippt verdeckt auf „'+tipp+'" – falsch. Der Spion hat sich verzockt.'));
+}
+async function abstimmung(partie){
+  G.phase='abstimmung';
+  zeigeKopf();
+  zeile('runde','ABSTIMMUNG');
+  zeile('sys','Wer ist der Spion? Jeder stimmt verdeckt ab.');
+  var stimmen={};
+  stimmen[0]=await menschStimme();
+  if(G.id!==partie)return;
+  for(var i=1;i<4;i++){
+    G.spieler[i].denkt=true; zeigeKarte(i);
+    stimmen[i]=await agentStimme(i);
+    G.spieler[i].denkt=false; zeigeKarte(i);
+    if(G.id!==partie)return;
+  }
+  G.stimmen=stimmen;
+  var a=auszaehlen(stimmen);
+  G.zaehlung=a.zaehlung;
+  G.beschuldigt=a.beschuldigt;
+  [0,1,2,3].forEach(function(i){
+    zeile('sys',G.spieler[i].name+' stimmt für '+G.spieler[stimmen[i]].name+'.');
+  });
+  zeigeAlleKarten();
+  if(a.beschuldigt==null){
+    beende('spion','Keine eindeutige Mehrheit – der Spion bleibt unentdeckt.');
+    return;
+  }
+  var b=G.spieler[a.beschuldigt];
+  if(!b.spion){
+    beende('spion','Die Mehrheit beschuldigt '+b.name+' – aber '+b.name+' war es nicht.');
+    return;
+  }
+  zeile('alarm','Die Mehrheit beschuldigt '+b.name+' – und '+b.name+' IST der Spion! Ein letzter Rateversuch …');
+  G.phase='letzterTipp';
+  zeigeKopf();
+  var tipp;
+  if(b.mensch){
+    tipp=await menschLetzterTipp();
+  }else{
+    b.denkt=true; zeigeKarte(b.idx);
+    tipp=await agentTipp(b.idx,true);
+    b.denkt=false;
+  }
+  if(G.id!==partie)return;
+  beendeMitTipp(b.idx,tipp,true);
+}
+function beende(sieger,grund){
+  if(G.phase==='ende')return;
+  G.phase='ende';
+  G.ergebnis={sieger:sieger,grund:grund};
+  if(G.warteMensch){ var w=G.warteMensch; G.warteMensch=null; w(null); }
+  stoppeTimer();
+  G.amZug=-1;
+  zeile('runde','ENDE');
+  zeile('alarm',grund);
+  zeile('privat','Der Begriff war „'+G.begriff+'". Spion: '+G.spieler[G.spion].name+'.');
+  G.spieler.forEach(function(sp){
+    var gewonnen=(sieger==='spion')===sp.spion;
+    neueMiene(sp.idx,gewonnen?'triumphierend':'enttaeuscht');
+  });
+  zeigeKopf();
+  zeigeAlleKarten();
+  zeigeEndeAktion();
+}
+
+// ── MENSCHLICHER SPIELER ────────────────────────────────────────────────────
+// Die Zuege des Menschen sind Promises, die von der Oberflaeche aufgeloest
+// werden. Der Test ersetzt menschZug/menschStimme/menschLetzterTipp.
+var TIMER={id:null,ende:0};
+function stoppeTimer(){ if(TIMER.id){ clearInterval(TIMER.id); TIMER.id=null; } }
+function menschZug(i){
+  var sp=G.spieler[i];
+  return new Promise(function(resolve){
+    G.warteMensch=resolve;
+    var optionen='<option value="auto">Miene: automatisch</option>'+MIMIK_SPIEL.map(function(k){
+      return '<option value="'+k+'">'+MIMIK[k].label+'</option>';
+    }).join('');
+    setzeAktion(
+      '<div class="info">Du bist dran'+(sp.spion?' – als Spion: bleib unauffällig.':' – beschreibe den Begriff, ohne ihn zu nennen.')+'</div>'+
+      '<div class="zeile"><input id="hinweisFeld" maxlength="90" placeholder="dein Hinweis (max. 8 Wörter)" onkeydown="if(event.key===\'Enter\')hinweisAbschicken()">'+
+      '<button class="gbtn" type="button" onclick="hinweisAbschicken()" style="flex:0 0 auto;padding:8px 18px">SAGEN</button></div>'+
+      '<div class="zeile"><select id="mieneWahl">'+optionen+'</select><span id="timer"></span></div>'+
+      spionKnopfHtml()
+    );
+    var f=el('hinweisFeld'); if(f&&f.focus)f.focus();
+    starteTimer();
+  });
+}
+function starteTimer(){
+  stoppeTimer();
+  var sek=parseInt(CFG.zugZeit,10)||0;
+  var t=el('timer');
+  if(!sek){ if(t)t.textContent=''; return; }
+  TIMER.ende=Date.now()+sek*1000;
+  var tick=function(){
+    var rest=Math.max(0,Math.ceil((TIMER.ende-Date.now())/1000));
+    var t2=el('timer');
+    if(t2){ t2.textContent='⏱ '+rest+' s'; t2.className=rest<=10?'knapp':''; }
+    if(rest<=0){ stoppeTimer(); hinweisAbschicken(true); }
+  };
+  tick();
+  TIMER.id=setInterval(tick,250);
+}
+function hinweisAbschicken(zeitAbgelaufen){
+  if(!G.warteMensch||G.phase!=='beschreiben')return;
+  var sp=G.spieler[0];
+  var f=el('hinweisFeld');
+  var text=kurz(f?f.value:'',90);
+  if(!zeitAbgelaufen&&!text){ aktionsHinweis('Bitte einen Hinweis eingeben.'); return; }
+  if(!sp.spion&&text&&verraetBegriff(text,G.begriff)){
+    if(zeitAbgelaufen){ text=''; }
+    else{ aktionsHinweis('Das verrät den Begriff zu direkt – anders umschreiben.'); return; }
+  }
+  if(!text)text='(schweigt)';
+  var wahl=el('mieneWahl')?el('mieneWahl').value:'auto';
+  var mimik=(wahl&&wahl!=='auto')?wahl:wuerfeln(['neutral','laechelnd','nachdenklich','selbstsicher']);
+  stoppeTimer();
+  var w=G.warteMensch; G.warteMensch=null;
+  setzeAktion('<div class="info">…</div>'+spionKnopfHtml());
+  w({text:text,mimik:mimik});
+}
+function aktionsHinweis(text){
+  var alt=el('aktionsHinweis');
+  if(alt){ alt.textContent=text; return; }
+  var a=el('aktion'); if(!a)return;
+  var d=document.createElement('div');
+  d.id='aktionsHinweis'; d.className='z alarm'; d.textContent=text;
+  a.appendChild(d);
+}
+function spionKnopfHtml(){
+  var sp=G.spieler[0];
+  if(!sp||!sp.spion||G.phase!=='beschreiben')return '';
+  return '<button class="klein" type="button" onclick="oeffneSpionTipp()" style="border-color:var(--rot2);color:var(--rot2)">'+
+    '🕵 BEGRIFF VERDECKT RATEN (nur einmal – falsch heißt verloren)</button>';
+}
+function oeffneSpionTipp(){
+  if(G.phase!=='beschreiben'||!G.spieler[0].spion)return;
+  oeffneModal('<h2>VERDECKT RATEN</h2>'+
+    '<p>Kategorie: <b>'+escapeHtml(G.kategorie)+'</b>. Richtig geraten – du gewinnst sofort. Falsch – du verlierst sofort.</p>'+
+    '<input id="tippFeld" maxlength="40" placeholder="dein Tipp" onkeydown="if(event.key===\'Enter\')spionTippAbgeben()">'+
+    '<div class="knoepfe"><button class="klein" type="button" onclick="schliesseModal()">ABBRECHEN</button>'+
+    '<button class="gbtn" type="button" onclick="spionTippAbgeben()">TIPP ABGEBEN</button></div>');
+  var f=el('tippFeld'); if(f&&f.focus)f.focus();
+}
+function spionTippAbgeben(){
+  var f=el('tippFeld'), tipp=kurz(f?f.value:'',40);
+  if(!tipp)return;
+  schliesseModal();
+  if(G.phase!=='beschreiben')return;
+  zeile('sys','🕵 Du schreibst verdeckt einen Tipp auf …');
+  beendeMitTipp(0,tipp,false);
+}
+function menschStimme(){
+  return new Promise(function(resolve){
+    G.warteMensch=resolve;
+    G.waehltStimme=true;
+    setzeAktion('<div class="info">Klicke auf das Porträt der Person, die du für den Spion hältst'+
+      (G.spieler[0].spion?' (du bist der Spion – lenk den Verdacht auf jemand anderen).':'.')+'</div>');
+    zeigeAlleKarten();
+  });
+}
+function karteGeklickt(i){
+  if(!G.waehltStimme||i===0||!G.warteMensch)return;
+  G.waehltStimme=false;
+  var w=G.warteMensch; G.warteMensch=null;
+  G.meineStimme=i;
+  setzeAktion('<div class="info">Deine Stimme: '+escapeHtml(G.spieler[i].name)+'. Die anderen stimmen ab …</div>');
+  zeigeAlleKarten();
+  w(i);
+}
+function menschLetzterTipp(){
+  return new Promise(function(resolve){
+    G.warteMensch=resolve;
+    setzeAktion('<div class="info" style="color:var(--rot2)">Du bist enttarnt! Ein letzter Versuch: Was ist der Begriff? (Kategorie: '+escapeHtml(G.kategorie)+')</div>'+
+      '<div class="zeile"><input id="letzterTippFeld" maxlength="40" placeholder="dein Tipp" onkeydown="if(event.key===\'Enter\')letztenTippAbgeben()">'+
+      '<button class="gbtn" type="button" onclick="letztenTippAbgeben()" style="flex:0 0 auto;padding:8px 18px">RATEN</button></div>');
+    var f=el('letzterTippFeld'); if(f&&f.focus)f.focus();
+  });
+}
+function letztenTippAbgeben(){
+  var f=el('letzterTippFeld'), tipp=kurz(f?f.value:'',40);
+  if(!tipp||!G.warteMensch)return;
+  var w=G.warteMensch; G.warteMensch=null;
+  w(tipp);
+}
+
+// ── OBERFLAECHE ─────────────────────────────────────────────────────────────
+function zeile(typ,text,sp){
+  var v=el('verlauf'); if(!v)return;
+  var d=document.createElement('div');
+  d.className='z '+typ;
+  if(typ==='hinweis'&&sp){
+    d.innerHTML='<span class="wer" style="color:'+farbe(sp.idx)+'">'+escapeHtml(sp.name)+':</span>„'+escapeHtml(text)+'"';
+  }else{
+    d.textContent=text;
+  }
+  v.appendChild(d);
+  v.scrollTop=v.scrollHeight;
+}
+function farbe(i){ return ['#e0b252','#7fb3d5','#a9dfbf','#d7a9e3'][i]||'#fff'; }
+function setzeAktion(html){ var a=el('aktion'); if(a)a.innerHTML=html; }
+function baueRaster(){
+  var r=el('raster'); if(!r)return;
+  r.innerHTML=[0,1,2,3].map(function(i){
+    return '<div class="sp" id="sp'+i+'" onclick="karteGeklickt('+i+')">'+
+      '<div class="platzhalter">?</div><img id="img'+i+'" alt="">'+
+      '<div class="lade"></div><div class="denkt">… überlegt</div><div class="stimmen" id="stimmen'+i+'"></div>'+
+      '<div class="schild"><div><span class="name" id="name'+i+'"></span><span id="marke'+i+'"></span></div>'+
+      '<div class="zitat" id="zitat'+i+'"></div></div></div>';
+  }).join('');
+}
+function zeigeKarte(i){
+  var sp=G.spieler[i], k=el('sp'+i);
+  if(!sp||!k)return;
+  var klassen=['sp'];
+  if(G.amZug===i)klassen.push('amzug');
+  if(sp.zeichnet||BILD.wartend.indexOf(i)>=0)klassen.push('zeichnet');
+  if(sp.denkt)klassen.push('denkend');
+  if(G.waehltStimme&&i!==0)klassen.push('waehlbar');
+  if(G.meineStimme===i&&G.phase!=='beschreiben')klassen.push('gewaehlt');
+  if(G.zaehlung)klassen.push('zeigtStimmen');
+  k.className=klassen.join(' ');
+  var img=el('img'+i);
+  if(img&&sp.bild&&img.src!==sp.bild)img.src=sp.bild;
+  var n=el('name'+i); if(n){ n.textContent=sp.name; n.style.color=farbe(i); }
+  var marke='';
+  if(sp.mensch)marke+='<span class="marke du">DU</span>';
+  else marke+='<span class="marke ki">KI</span>';
+  if(sp.spion&&(sp.mensch||G.phase==='ende'))marke+='<span class="marke spion">SPION</span>';
+  var m=el('marke'+i); if(m)m.innerHTML=marke;
+  var z=el('zitat'+i); if(z)z.textContent=sp.letzterHinweis?'„'+sp.letzterHinweis+'"':'';
+  var s=el('stimmen'+i); if(s&&G.zaehlung)s.textContent=G.zaehlung[i]+' ✋';
+}
+function zeigeAlleKarten(){ [0,1,2,3].forEach(zeigeKarte); }
+function zeigeKopf(){
+  var ich=G.spieler[0];
+  var k=el('kopfKategorie'); if(k)k.textContent='Kategorie: '+G.kategorie;
+  var r=el('kopfRolle');
+  if(r&&ich){
+    r.textContent=ich.spion?'Du bist der SPION':'Begriff: '+G.begriff;
+    r.className='chip rolle'+(ich.spion?' spion':'');
+  }
+  var ru=el('kopfRunde');
+  if(ru){
+    ru.textContent=G.phase==='beschreiben'?'Runde '+G.runde+'/'+G.runden
+      :G.phase==='abstimmung'?'Abstimmung':G.phase==='letzterTipp'?'Letzter Tipp':'Ende';
+  }
+}
+function zeigeEndeAktion(){
+  var e=G.ergebnis||{};
+  var ichGewinne=(e.sieger==='spion')===G.spieler[0].spion;
+  setzeAktion('<div class="info" style="color:'+(ichGewinne?'var(--gruen)':'var(--rot2)')+';font-weight:600">'+
+    (ichGewinne?'Du hast gewonnen.':'Du hast verloren.')+'</div>'+
+    '<div class="endknoepfe"><button class="gbtn" type="button" onclick="partieStarten()">NOCHMAL</button>'+
+    '<button class="klein" type="button" onclick="oeffneGedanken()">WAS DIE KI DACHTE</button>'+
+    '<button class="klein" type="button" onclick="zumStart()">ZUM START</button></div>');
+}
+function oeffneGedanken(){
+  var html='<h2>WAS DIE AGENTEN DACHTEN</h2><p>Diese Notizen hat jeder Agent nur für sich geschrieben – sie standen in keinem Prompt der anderen.</p>';
+  G.spieler.forEach(function(sp){
+    if(sp.mensch)return;
+    html+='<p><b style="color:'+farbe(sp.idx)+'">'+escapeHtml(sp.name)+'</b> ('+(sp.spion?'Spion':'kannte den Begriff')+')</p>';
+    html+=sp.notizen.length?sp.notizen.map(function(n){ return '<div class="notiz">'+escapeHtml(n)+'</div>'; }).join('')
+                           :'<div class="notiz">(keine Notizen)</div>';
+  });
+  html+='<div class="knoepfe"><button class="klein" type="button" onclick="schliesseModal()">SCHLIESSEN</button></div>';
+  oeffneModal(html);
+}
+function oeffneModal(html){ var m=el('modal'), i=el('modalInhalt'); if(i)i.innerHTML=html; if(m)m.className='modal an'; }
+function schliesseModal(){ var m=el('modal'); if(m)m.className='modal'; }
+function oeffneRegeln(){
+  oeffneModal('<h2>REGELN</h2><ol>'+
+    '<li>Vier Spieler, einer davon ist zufällig der <b>Spion</b>. Alle kennen die <b>Kategorie</b>, nur die drei anderen auch den <b>Begriff</b>.</li>'+
+    '<li>Reihum (im Uhrzeigersinn) gibt jeder pro Runde <b>einen kurzen Hinweis</b>. Wer den Begriff kennt, umschreibt ihn so, dass der Spion ihn nicht errät. Den Begriff selbst zu nennen ist verboten.</li>'+
+    '<li>Der Spion darf <b>jederzeit einmal verdeckt raten</b>. Richtig: Der Spion gewinnt sofort. Falsch: Der Spion verliert sofort.</li>'+
+    '<li>Nach der letzten Runde <b>stimmen alle ab</b>, wer der Spion ist. Bei Gleichstand oder falscher Mehrheit gewinnt der Spion.</li>'+
+    '<li>Wird der Spion enttarnt, hat er <b>einen letzten Rateversuch</b>. Trifft er, gewinnt er trotzdem – sonst gewinnen die anderen.</li>'+
+    '</ol><p class="notiz">Die KI-Agenten kennen nur ihre eigene Rolle. Wer sonst Spion ist, steht in keinem ihrer Prompts – sie können nur aus den Hinweisen schließen.</p>'+
+    '<div class="knoepfe"><button class="klein" type="button" onclick="schliesseModal()">VERSTANDEN</button></div>');
+}
+function stilOptionen(){
+  return Object.keys(STIL_NAMEN).map(function(k){
+    return '<option value="'+k+'"'+(CFG.stil===k?' selected':'')+'>'+STIL_NAMEN[k]+'</option>';
+  }).join('');
+}
+function fuelleStilWahl(){
+  var s=el('stilwahl'); if(!s)return;
+  s.innerHTML=stilOptionen();
+  s.value=CFG.stil;
+  var e=el('stilEigen'); if(e){ e.value=CFG.stilEigen||''; e.style.display=CFG.stil==='eigen'?'block':'none'; }
+}
+// Wie in PROXIMA: Wer auf "Eigener Stil" umschaltet, findet den bisherigen
+// Stiltext schon im Feld vor.
+function stilGewechselt(){
+  var s=el('stilwahl'), e=el('stilEigen'); if(!s||!e)return;
+  if(s.value==='eigen'){
+    if(!e.value.trim())e.value=STILE[CFG.stil]||STILE.noir;
+    e.style.display='block';
+  }else{
+    e.style.display='none';
+    CFG.stil=s.value;
+  }
+}
+function oeffneStil(){
+  oeffneModal('<h2>BILDSTIL</h2><p>Gilt ab sofort; alle vier Porträts werden neu gezeichnet.</p>'+
+    '<select id="stilwahl2">'+stilOptionen()+'</select>'+
+    '<input id="stilEigen2" placeholder="eigener Stil" value="'+escapeHtml(CFG.stilEigen||'')+'">'+
+    '<div class="knoepfe"><button class="klein" type="button" onclick="schliesseModal()">ABBRECHEN</button>'+
+    '<button class="gbtn" type="button" onclick="stilUebernehmen()">ÜBERNEHMEN</button></div>');
+}
+function stilUebernehmen(){
+  var s=el('stilwahl2'), e=el('stilEigen2');
+  CFG.stil=s?s.value:CFG.stil;
+  CFG.stilEigen=e?e.value.trim():CFG.stilEigen;
+  speichereCfg();
+  fuelleStilWahl();
+  schliesseModal();
+  [0,1,2,3].forEach(bildAnfordern);
+}
+function aussehenWuerfeln(){ var f=el('aussehenFeld'); if(f)f.value=zufallsAussehen(); }
+function leseStartFormular(){
+  var n=el('nameFeld'), a=el('aussehenFeld'), s=el('stilwahl'), e=el('stilEigen'), r=el('rundenwahl'), z=el('zeitwahl');
+  if(n)CFG.name=kurz(n.value,24);
+  if(a)CFG.aussehen=String(a.value||'').trim();
+  if(s&&s.value)CFG.stil=s.value;
+  if(e)CFG.stilEigen=String(e.value||'').trim();
+  if(r)CFG.runden=parseInt(r.value,10)||3;
+  if(z)CFG.zugZeit=parseInt(z.value,10)||0;
+  speichereCfg();
+}
+function partieStarten(){
+  leseStartFormular();
+  if(G.warteMensch){ var w=G.warteMensch; G.warteMensch=null; w(null); }
+  stoppeTimer();
+  schliesseModal();
+  BILD.wartend=[]; BILD.fehlerGemeldet=false;
+  G=neuePartie({name:CFG.name||'Du',aussehen:CFG.aussehen,runden:CFG.runden});
+  var st=el('start'); if(st)st.className='aus';
+  var sp=el('spiel'); if(sp)sp.className='an';
+  var v=el('verlauf'); if(v)v.innerHTML='';
+  baueRaster();
+  zeigeKopf();
+  zeigeAlleKarten();
+  setzeAktion('');
+  var ich=G.spieler[0];
+  zeile('sys','Am Tisch: '+namensListe()+'. Kategorie: '+G.kategorie+'.');
+  if(ich.spion){
+    zeile('privat','Du bist der SPION. Du kennst nur die Kategorie „'+G.kategorie+'". Bleib unauffällig und finde den Begriff heraus.');
+  }else{
+    zeile('privat','Dein Begriff: „'+G.begriff+'". Einer der drei anderen ist der Spion – nur wer, weißt du nicht.');
+  }
+  zeile('sys','Es beginnt '+G.spieler[G.reihenfolge[0]].name+'. Die Porträts entstehen nacheinander auf deinem Rechner.');
+  [0,1,2,3].forEach(bildAnfordern);
+  spielLaufen().catch(function(e){ zeile('alarm','Fehler im Ablauf: '+((e&&e.message)||e)); });
+}
+function partieAbbrechen(){
+  if(G.phase!=='ende'&&G.phase!=='start'){
+    if(typeof confirm==='function'&&!confirm('Partie wirklich beenden?'))return;
+  }
+  zumStart();
+}
+function zumStart(){
+  if(G.warteMensch){ var w=G.warteMensch; G.warteMensch=null; w(null); }
+  stoppeTimer();
+  G={id:G.id+1,phase:'start',spieler:[]};
+  BILD.wartend=[];
+  var sp=el('spiel'); if(sp)sp.className='';
+  var st=el('start'); if(st)st.className='';
+  schliesseModal();
+}
+function initStart(){
+  ladeCfg();
+  fuelleStilWahl();
+  var n=el('nameFeld'); if(n)n.value=CFG.name||'';
+  var a=el('aussehenFeld'); if(a)a.value=CFG.aussehen||zufallsAussehen();
+  var r=el('rundenwahl'); if(r)r.value=String(CFG.runden||3);
+  var z=el('zeitwahl'); if(z)z.value=String(CFG.zugZeit);
+  var v=el('versionStart'); if(v)v.textContent='LE SPION '+VERSION;
+}
+initStart();
+</script>
