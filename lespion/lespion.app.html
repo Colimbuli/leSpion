@@ -41,6 +41,9 @@ button{font-family:inherit;}
 .gbtn:disabled{opacity:0.5;cursor:default;}
 .klein{background:none;border:1px solid var(--border);color:var(--dim);font-size:0.72rem;letter-spacing:0.08em;padding:7px 11px;cursor:pointer;}
 .klein:hover{color:var(--gold);border-color:var(--gold);}
+.formular .schalter{display:flex;gap:10px;align-items:flex-start;text-transform:none;letter-spacing:normal;font-size:0.78rem;
+  color:var(--dim);line-height:1.45;cursor:pointer;margin:0;}
+.formular .schalter input{width:auto;margin-top:3px;flex:0 0 auto;}
 .hinweistext{font-size:0.75rem;color:var(--dim);line-height:1.45;}
 #startFehler{display:none;max-width:500px;width:100%;background:rgba(192,57,43,0.15);border:1px solid var(--rot);color:#f0b0a8;
   padding:8px 12px;font-size:0.8rem;text-align:left;white-space:pre-wrap;}
@@ -150,12 +153,15 @@ button{font-family:inherit;}
         </select>
       </div>
     </div>
+    <label class="schalter"><input type="checkbox" id="spionTestWahl" checked>
+      <span><b>Spion-Test:</b> Jeder KI-Hinweis wird vorab von einem Testleser geprüft, der nur die Kategorie kennt.
+      Errät er den Begriff, war der Hinweis zu deutlich und die KI muss neu formulieren. Besseres Spiel, aber langsamer.</span></label>
     <div class="hinweistext">Modus: <b>Einzelspieler</b> – du und drei KI-Agenten. Die Rollen werden zufällig verteilt, auch du kannst der Spion sein. Mehrspieler folgt.</div>
   </div>
   <button class="gbtn" id="startKnopf" type="button" onclick="partieStarten()">PARTIE STARTEN</button>
   <button class="klein" type="button" onclick="oeffneRegeln()">REGELN</button>
   <div id="startFehler"></div>
-  <div class="version" id="versionStart">LE SPION V0.1</div>
+  <div class="version" id="versionStart">LE SPION V0.2</div>
 </div>
 
 <div id="spiel">
@@ -188,7 +194,7 @@ button{font-family:inherit;}
 // KI-Aufruf (ai()) stammen aus PROXIMA. Raeume, Akte und fremde Bildquellen
 // sind bewusst weggelassen.
 // ═══════════════════════════════════════════════════════════════════════════
-var VERSION='V0.1';
+var VERSION='V0.2';
 
 // ── STILE (aus PROXIMA) ─────────────────────────────────────────────────────
 var STILE = {
@@ -269,9 +275,19 @@ var MERKMAL = ['round glasses','a thin moustache','freckles','a scar on the chee
 var KLEIDUNG = ['a beige trench coat','a black turtleneck','a tweed jacket','a leather jacket','a white shirt and suspenders',
   'a dark suit and tie','a knitted cardigan','a hooded raincoat','a red scarf and wool coat','a velvet blazer'];
 
+// Jeder Agent bekommt einen festen Ton, damit die Hinweise nicht alle gleich
+// klingen. Der Ton aendert nur die Formulierung, nicht die Taktik.
+var PERSOENLICHKEITEN = [
+  'trocken und wortkarg, mit leiser Ironie',
+  'poetisch und bildhaft – lieber eine Stimmung als eine Tatsache',
+  'frech und flapsig, gern mit einer kleinen Stichelei',
+  'umständlich und anekdotisch, als würdest du nebenbei von einem Erlebnis erzählen',
+  'kühl und berechnend, jedes Wort abgewogen'
+];
+
 // ── KONFIGURATION (pro Browser) ─────────────────────────────────────────────
 var CFG_KEY='lespion_cfg_v1';
-var CFG={name:'',aussehen:'',stil:'noir',stilEigen:'',runden:3,zugZeit:60};
+var CFG={name:'',aussehen:'',stil:'noir',stilEigen:'',runden:3,zugZeit:60,spionTest:true};
 function ladeCfg(){
   try{ var r=localStorage.getItem(CFG_KEY); if(r)Object.assign(CFG,JSON.parse(r)); }catch(e){}
 }
@@ -515,6 +531,7 @@ function neuePartie(opt){
   var begriff=opt.begriff||wuerfeln(BEGRIFFE[kategorie]);
   var spion=(opt.spion!=null)?opt.spion:zufall(4);
   var belegt=[opt.name||'Du'];
+  var toene=mischen(PERSOENLICHKEITEN);
   var spieler=[];
   for(var i=0;i<4;i++){
     var p;
@@ -527,7 +544,8 @@ function neuePartie(opt){
     spieler.push({
       idx:i, name:p.name, aussehen:p.aussehen, mensch:(i===0), spion:(i===spion),
       seed:neuerSeed(), mimik:'neutral', kopf:KOPF[0], bild:'',
-      letzterHinweis:'', notizen:[], verdacht:'', denkt:false
+      letzterHinweis:'', notizen:[], verdacht:'', denkt:false,
+      ton:(i===0)?'':toene[i-1]
     });
   }
   var start=(opt.start!=null)?opt.start:zufall(4);
@@ -563,30 +581,84 @@ function rollenText(sp){
   return kopf+'Der geheime Begriff lautet „'+G.begriff+'". Einer der vier Spieler ist der Spion und kennt den Begriff nicht. '+
     'Wer der Spion ist, weißt du NICHT – du kennst nur deine eigene Rolle und kannst nur Vermutungen anstellen.\n';
 }
-function baueHinweisPrompt(i){
+function tonText(sp){
+  return sp.ton?'Dein Ton: '+sp.ton+'. Bleib in jedem Hinweis bei diesem Ton.\n':'';
+}
+// ── TAKTIK ──────────────────────────────────────────────────────────────────
+// Ohne konkrete Anleitung greifen Sprachmodelle zur Lexikon-Definition
+// ("steht am Meer und leuchtet"). Deshalb: erlaubte und verbotene Techniken,
+// ein Beispiel an einem Begriff, der im Spiel nicht vorkommt, und eine
+// Steigerung ueber die Runden.
+var TAKTIK_WISSEND=
+  'SO SPIELST DU GUT:\n'+
+  '- Dein Hinweis muss auch auf mindestens drei ANDERE Begriffe der Kategorie passen. Nur wer den Begriff kennt, '+
+  'soll merken, warum er besonders gut passt. Fallen dir keine drei anderen ein, ist dein Hinweis zu deutlich.\n'+
+  '- Gute Techniken: eine persönliche Erinnerung, ein Geräusch, ein Geruch, ein Gefühl, ein unwichtiges Nebendetail, '+
+  'eine Redewendung, eine Situation, in der man ihm begegnet.\n'+
+  '- Verboten: die Funktion beschreiben, das Aussehen beschreiben, den Oberbegriff nennen, Definitionen wie im Lexikon.\n'+
+  '- Greife den Gedanken früherer Hinweise nicht auf – komm von einer anderen Seite. Zusammen dürfen die Hinweise '+
+  'den Begriff nicht verraten.\n';
+var BEISPIEL_WISSEND=
+  'BEISPIEL (anderer Begriff, nur zur Orientierung): Begriff „Leuchtturm", Kategorie „Orte".\n'+
+  '  schlecht: "Steht an der Küste und leuchtet nachts." – verrät ihn sofort\n'+
+  '  schlecht: "Ein hohes Gebäude." – Oberbegriff, beweist nichts\n'+
+  '  gut: "Da oben war man immer allein." – passt auch auf Burgturm, Kirche, Gefängnis\n'+
+  '  gut: "Ich zähle dabei immer die Sekunden." – passt auch auf Bahnhof, Kino, Schwimmbad\n';
+var TAKTIK_SPION=
+  'SO SPIELST DU ALS SPION GUT:\n'+
+  '- Überlege für dich, welche Begriffe der Kategorie zu ALLEN bisherigen Hinweisen passen, und grenze diese Liste '+
+  'Runde für Runde ein.\n'+
+  '- Knüpfe an die Gemeinsamkeit der bisherigen Hinweise an – aber mit eigenen Worten, nie mit denselben Wörtern.\n'+
+  '- Bist du früh dran oder sind die Hinweise noch unklar: Gib einen stimmungsvollen, mehrdeutigen Hinweis, der zu '+
+  'vielen Begriffen der Kategorie passt – etwa ein Gefühl oder eine Erinnerung.\n'+
+  '- Klinge selbstsicher. Sei nicht vager als die anderen und sag nie, dass du unsicher bist.\n';
+var BEISPIEL_SPION=
+  'BEISPIEL (nur zur Orientierung): Kategorie „Orte", bisherige Hinweise "Da oben war man immer allein." und '+
+  '"Ich zähle dabei immer die Sekunden."\n'+
+  '  schlecht: "Ein schöner Ort." – zu leer, verdächtig\n'+
+  '  schlecht: "Da oben war man allein." – kopiert nur, verdächtig\n'+
+  '  gut: "Bei Sturm möchte ich da nicht sein." – passt zu beiden und lässt vieles offen\n';
+function spionMerkmale(){
+  return 'WORAN DU DEN SPION ERKENNST:\n'+
+    '- Sein Hinweis würde zu fast jedem Begriff der Kategorie passen, aber nicht besonders gut zu „'+G.begriff+'".\n'+
+    '- Er greift Wörter oder Bilder aus früheren Hinweisen auf, statt etwas Eigenes zu bringen.\n'+
+    '- Er bleibt vager als nötig, oder sein Hinweis passt zu einem anderen Begriff der Kategorie besser.\n'+
+    'Prüfe jeden fremden Hinweis einzeln: Passt er wirklich zu „'+G.begriff+'"?\n';
+}
+function rundenStufe(){
+  if(G.runde<=1)return 'Erste Runde: so vage wie möglich – gerade so, dass ein Wissender nicken würde.';
+  if(G.runde<G.runden)return 'Mittlere Runde: Sind die bisherigen Hinweise noch sehr breit, darfst du minimal konkreter werden – '+
+    'aber nie so, dass jemand, der nur die Kategorie kennt, den Begriff erraten könnte.';
+  return 'Letzte Runde: Bleib vorsichtig. Der Spion hat viele Hinweise gesammelt; jedes zusätzliche Detail hilft ihm beim Raten.';
+}
+function baueHinweisPrompt(i,rueckmeldung){
   var sp=G.spieler[i];
   var mimiken=MIMIK_SPIEL.join(', ');
-  var t=rollenText(sp)+'\n'+
+  var t=rollenText(sp)+tonText(sp)+'\n'+
     'Reihum gibt jeder einen kurzen Hinweis auf den Begriff.\n';
   if(sp.spion){
     t+='Dein Ziel: Gib einen Hinweis, der zu den bisherigen passt, damit du nicht auffällst, und finde aus den Hinweisen '+
-       'der anderen heraus, was der Begriff ist.\n';
+       'der anderen heraus, was der Begriff ist.\n\n'+TAKTIK_SPION+'\n'+BEISPIEL_SPION;
   }else{
-    t+='Dein Ziel: Zeig mit deinem Hinweis, dass du den Begriff kennst – aber so indirekt, dass der Spion ihn daraus '+
-       'nicht erraten kann. Achte auf Hinweise, die verdächtig vage sind oder nicht passen.\n';
+    t+='Dein Ziel: Zeig mit deinem Hinweis, dass du den Begriff kennst – aber so verschlüsselt, dass der Spion ihn daraus '+
+       'nicht erraten kann. Gleichzeitig beobachtest du die anderen, um den Spion zu finden.\n\n'+
+       TAKTIK_WISSEND+'\n'+BEISPIEL_WISSEND+'\n'+spionMerkmale();
   }
   t+='\nBISHERIGE HINWEISE:\n'+oeffentlicherVerlauf()+'\n\n'+
     'DEINE PRIVATEN NOTIZEN (nur du kennst sie):\n'+eigeneNotizen(sp)+'\n\n'+
-    'Jetzt bist du dran (Runde '+G.runde+' von '+G.runden+').\n'+
+    'Jetzt bist du dran (Runde '+G.runde+' von '+G.runden+'). '+(sp.spion?'':rundenStufe())+'\n'+
     'Regeln für deinen Hinweis: höchstens acht Wörter, auf Deutsch, '+
     (sp.spion?'':'nenne niemals den Begriff selbst, keinen Wortteil davon und keine Übersetzung, ')+
-    'wiederhole keinen bisherigen Hinweis.\n\n'+
-    'Antworte NUR mit einem JSON-Objekt, ohne weiteren Text:\n';
+    'wiederhole keinen bisherigen Hinweis.\n'+
+    (rueckmeldung?'\nACHTUNG: '+rueckmeldung+'\n':'')+
+    '\nAntworte NUR mit einem JSON-Objekt, ohne weiteren Text:\n';
   if(sp.spion){
-    t+='{"hinweis":"…","mimik":"<eins von: '+mimiken+'>","vermutung":"<dein bester Tipp für den Begriff, ein Wort>",'+
-       '"sicherheit":<0 bis 100, wie sicher du beim Tipp bist>,"notiz":"<ein Satz private Überlegung>"}';
+    t+='{"hinweis":"…","kandidaten":["<Begriffe der Kategorie, die zu allen Hinweisen passen>"],'+
+       '"vermutung":"<dein bester Tipp für den Begriff, ein Wort>","sicherheit":<0 bis 100, wie sicher du beim Tipp bist>,'+
+       '"mimik":"<eins von: '+mimiken+'>","notiz":"<ein Satz private Überlegung>"}';
   }else{
-    t+='{"hinweis":"…","mimik":"<eins von: '+mimiken+'>","verdacht":"<Name, den du gerade für den Spion hältst, oder leer>",'+
+    t+='{"hinweis":"…","passtAuch":["<anderer Begriff der Kategorie>","<anderer>","<anderer>"],'+
+       '"mimik":"<eins von: '+mimiken+'>","verdacht":"<Name, den du gerade für den Spion hältst, oder leer>",'+
        '"notiz":"<ein Satz private Überlegung>"}';
   }
   return t;
@@ -596,12 +668,22 @@ function baueStimmPrompt(i){
   var andere=G.spieler.filter(function(s){ return s.idx!==i; }).map(function(s){ return s.name; });
   return rollenText(sp)+'\n'+
     'Die Hinweisrunden sind vorbei. Jetzt stimmt jeder ab, wer der Spion ist.\n'+
-    (sp.spion?'Du bist der Spion: Stimme für jemand anderen, so dass der Verdacht nicht auf dich fällt.\n'
-             :'Du selbst bist es nicht. Wer hat Hinweise gegeben, die den Begriff nicht wirklich zu kennen scheinen?\n')+
+    (sp.spion?'Du bist der Spion: Stimme für jemand anderen. Wähle den, dessen Hinweise am vagesten oder seltsamsten '+
+              'wirkten – dann wirkt deine Stimme begründet und der Verdacht fällt nicht auf dich.\n'
+             :'Du selbst bist es nicht.\n'+spionMerkmale())+
     '\nALLE HINWEISE:\n'+oeffentlicherVerlauf()+'\n\n'+
     'DEINE PRIVATEN NOTIZEN:\n'+eigeneNotizen(sp)+'\n\n'+
     'Wähle genau einen dieser Namen: '+andere.join(', ')+'.\n'+
     'Antworte NUR mit einem JSON-Objekt: {"stimme":"<Name>","begruendung":"<ein Satz>"}';
+}
+// Der Testleser kennt nur Kategorie und Hinweise - genau wie der Spion. Er
+// bekommt keinen Namen und keine Rolle, nur die Raetselaufgabe.
+function baueSpionTestPrompt(kandidat){
+  var h=G.verlauf.filter(function(v){ return v.typ==='hinweis'; }).map(function(v){ return '- "'+v.text+'"'; });
+  h.push('- "'+kandidat+'"');
+  return 'Ratespiel. Kategorie: „'+G.kategorie+'". Mehrere Leute haben Hinweise auf einen geheimen Begriff '+
+    'dieser Kategorie gegeben:\n'+h.join('\n')+'\n\n'+
+    'Welcher Begriff ist gemeint? Antworte NUR mit einem JSON-Objekt: {"tipp":"<ein Wort>"}';
 }
 function baueTippPrompt(i,letzteChance){
   var sp=G.spieler[i];
@@ -634,33 +716,81 @@ function nameAus(wert,ausser){
   }
   return -1;
 }
-function hinweisGueltig(sp,text){
-  if(!text)return false;
-  if(!sp.spion&&verraetBegriff(text,G.begriff))return false;
-  var n=norm(text);
-  return !G.verlauf.some(function(v){ return v.typ==='hinweis'&&norm(v.text)===n; });
+function listeAus(wert){
+  if(!Array.isArray(wert))return [];
+  var gesehen={};
+  return wert.map(function(x){ return kurz(x,40); }).filter(function(x){
+    var n=norm(x);
+    if(!n||gesehen[n])return false;
+    gesehen[n]=true;
+    return true;
+  });
 }
-// Fragt den Agenten nach seinem Hinweis. Verraet er den Begriff oder kommt
-// nichts Brauchbares, wird bis zu zweimal nachgefragt; danach greift ein
-// neutraler Ersatz, damit das Spiel nicht haengt.
+// Warum ein Hinweis nicht taugt - leer heisst: taugt. Die Meldung geht beim
+// naechsten Versuch als Rueckmeldung an den Agenten.
+function hinweisFehler(sp,text,j){
+  if(!text)return 'Es kam kein Hinweis. Antworte mit dem verlangten JSON-Objekt.';
+  if(!sp.spion&&verraetBegriff(text,G.begriff))
+    return 'Dein letzter Vorschlag „'+text+'" enthielt den Begriff oder einen Wortteil davon. Das ist verboten.';
+  var n=norm(text);
+  if(G.verlauf.some(function(v){ return v.typ==='hinweis'&&norm(v.text)===n; }))
+    return 'Der Hinweis „'+text+'" wurde schon gegeben. Bring etwas Eigenes.';
+  if(!sp.spion){
+    var auch=listeAus(j&&j.passtAuch).filter(function(x){ return !tippRichtig(x,G.begriff); });
+    if(auch.length<2)
+      return 'Du hast nicht drei andere Begriffe der Kategorie genannt, auf die dein Hinweis „'+text+'" auch passt. '+
+             'Wenn dir keine einfallen, ist er zu deutlich – formuliere ihn offener.';
+  }
+  return '';
+}
+// Spion-Test: Ein eigener Aufruf, der nur Kategorie und Hinweise sieht, soll
+// den Begriff raten. Trifft er, war der Hinweis zu deutlich. Faellt der
+// Aufruf aus, gilt der Hinweis als bestanden - das Spiel soll nicht haengen.
+async function hinweisZuDeutlich(text){
+  if(CFG.spionTest===false)return false;
+  try{
+    var j=jsonAus(await frageKI(baueSpionTestPrompt(text)));
+    return !!(j&&j.tipp&&tippRichtig(j.tipp,G.begriff));
+  }catch(e){ return false; }
+}
+// Fragt den Agenten nach seinem Hinweis. Taugt er nicht, bekommt der Agent
+// den Grund zurueck und darf bis zu zweimal nachbessern. Rangfolge danach:
+// bestandener Hinweis > Hinweis, der nur am Spion-Test scheiterte > neutraler
+// Ersatz, damit das Spiel nicht haengt.
 async function agentHinweis(i){
-  var sp=G.spieler[i], antwort=null;
+  var sp=G.spieler[i], antwort=null, notloesung=null, rueck='';
   for(var versuch=0;versuch<3;versuch++){
     var roh='';
-    try{ roh=await frageKI(baueHinweisPrompt(i)); }catch(e){ roh=''; }
+    try{ roh=await frageKI(baueHinweisPrompt(i,rueck)); }catch(e){ roh=''; }
     var j=jsonAus(roh);
     var text=kurz(j&&j.hinweis?j.hinweis:(roh&&!j?roh.split('\n')[0]:''),90);
-    if(hinweisGueltig(sp,text)){ antwort=j||{}; antwort.hinweis=text; break; }
+    var fehler=hinweisFehler(sp,text,j);
+    if(fehler){ rueck=fehler; continue; }
+    var kandidat=Object.assign({},j||{},{hinweis:text});
+    if(!sp.spion&&await hinweisZuDeutlich(text)){
+      notloesung=notloesung||kandidat;
+      sp.notizen.push('Runde '+G.runde+': „'+text+'" war zu deutlich – ein Testleser hat den Begriff erraten.');
+      rueck='Dein letzter Vorschlag „'+text+'" war zu deutlich: Ein Testleser, der nur die Kategorie und die Hinweise '+
+            'kennt, hat den Begriff sofort erraten. Geh weiter weg vom Begriff.';
+      continue;
+    }
+    antwort=kandidat;
+    break;
   }
+  if(!antwort)antwort=notloesung;
   if(!antwort){
     antwort={hinweis:wuerfeln(NOTFALL_HINWEISE[sp.spion?'spion':'wissend']),mimik:'nachdenklich'};
   }
   if(antwort.notiz)sp.notizen.push('Runde '+G.runde+': '+kurz(antwort.notiz,200));
   if(!sp.spion){
+    var auch=listeAus(antwort.passtAuch);
+    if(auch.length)sp.notizen.push('Runde '+G.runde+': „'+antwort.hinweis+'" passt auch auf '+auch.join(', ')+'.');
     var v=nameAus(antwort.verdacht,i);
     sp.verdacht=v>=0?G.spieler[v].name:'';
     if(sp.verdacht)sp.notizen.push('Runde '+G.runde+': Verdacht gerade auf '+sp.verdacht+'.');
   }else{
+    var kand=listeAus(antwort.kandidaten);
+    if(kand.length)sp.notizen.push('Runde '+G.runde+': Mögliche Begriffe: '+kand.join(', ')+'.');
     sp.vermutung=kurz(antwort.vermutung,40);
     var s=parseInt(antwort.sicherheit,10);
     sp.sicherheit=isNaN(s)?0:Math.max(0,Math.min(100,s));
@@ -1086,6 +1216,7 @@ function leseStartFormular(){
   if(e)CFG.stilEigen=String(e.value||'').trim();
   if(r)CFG.runden=parseInt(r.value,10)||3;
   if(z)CFG.zugZeit=parseInt(z.value,10)||0;
+  var t=el('spionTestWahl'); if(t)CFG.spionTest=!!t.checked;
   speichereCfg();
 }
 function partieStarten(){
@@ -1135,6 +1266,7 @@ function initStart(){
   var a=el('aussehenFeld'); if(a)a.value=CFG.aussehen||zufallsAussehen();
   var r=el('rundenwahl'); if(r)r.value=String(CFG.runden||3);
   var z=el('zeitwahl'); if(z)z.value=String(CFG.zugZeit);
+  var t=el('spionTestWahl'); if(t)t.checked=CFG.spionTest!==false;
   var v=el('versionStart'); if(v)v.textContent='LE SPION '+VERSION;
 }
 initStart();
